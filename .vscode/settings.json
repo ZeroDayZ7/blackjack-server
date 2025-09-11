@@ -1,0 +1,31 @@
+{
+  // Wykluczenie z wyszukiwania
+  "search.exclude": {
+    "**/out": true,
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/logs": true,
+    "**/pnpm-lock.yaml": true,
+    "**/package.json": true,
+    "**/buildcache":true
+  },
+
+  // Wykluczenie z eksploratora plików
+  "files.exclude": {
+    "**/out": true,
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/logs": false,
+    "**/pnpm-lock.yaml": true,
+    "**/LICENSE": true,
+    "**/nginx": true,
+    // "**/nodemon.json": true,
+    "**/README.md": true,
+    // "**/cmdr": true,
+  },
+
+  // Wyłączenie zawijania linii w edytorze
+  "editor.wordWrap": "wordWrapColumn",
+  "editor.formatOnPaste": false,
+  "editor.formatOnSave": false,
+}
