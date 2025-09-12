@@ -1,6 +1,6 @@
-import { lobbies } from "../../data/lobbies.js";
-import { MyWebSocket } from "../types/types.js";
-import logger from "src/utils/logger.js";
+import { lobbies } from "../../data/data.js";
+import { MyWebSocket } from "@types";
+import logger from "@logger";
 
 export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
   switch (msg.type) {
@@ -115,13 +115,23 @@ export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
           leaveLobby.players
         )}`
       );
+
+      // Usuwamy gracza z listy
       leaveLobby.players = leaveLobby.players.filter((p) => p !== msg.nick);
+
+      // Jeśli opuszczający był hostem i są inni gracze, wybieramy nowego hosta
+      if (leaveLobby.host === msg.nick && leaveLobby.players.length > 0) {
+        leaveLobby.host = leaveLobby.players[0]; // kolejność według tablicy
+        logger.info(`[LEAVE_LOBBY] Nowy host: ${leaveLobby.host}`);
+      }
+
       logger.info(
         `[LEAVE_LOBBY] Po opuszczeniu gracze: ${JSON.stringify(
           leaveLobby.players
         )}`
       );
 
+      // Jeśli lobby puste, usuwamy je
       if (leaveLobby.players.length === 0) {
         const index = lobbies.findIndex((l) => l.id === leaveLobby.id);
         lobbies.splice(index, 1);
@@ -130,9 +140,11 @@ export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
         );
       }
 
+      // Broadcast aktualnej listy lobby wszystkim klientom
       broadcastLobbyList(wss);
       logger.info(`[LEAVE_LOBBY] Wysłano broadcastLobbyList`);
 
+      // Broadcast aktualizacji samego lobby dla pozostających graczy
       if (leaveLobby.players.length > 0) {
         broadcastLobbyUpdate(wss, leaveLobby);
         logger.info(
@@ -140,6 +152,7 @@ export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
         );
       }
 
+      // Informacja dla opuszczającego gracza
       ws.send(
         JSON.stringify({
           type: "left_lobby",

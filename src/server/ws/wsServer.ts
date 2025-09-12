@@ -28,6 +28,7 @@ export const setupWebSocket = (server: HttpServer) => {
           break;
         case "start_game":
         case "player_action":
+        case "subscribe_to_game": 
           handleGameMessage(ws, wss, data);
           break;
         default:
