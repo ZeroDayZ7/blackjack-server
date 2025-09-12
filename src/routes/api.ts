@@ -1,19 +1,25 @@
 import { Router } from "express";
-import { createLobby, getAllLobbies, joinLobby, leaveLobby } from "src/handlers/lobbyHandlers.js";
+import { 
+  createLobby, 
+  getAllLobbies, 
+  joinLobby, 
+  leaveLobby, 
+  startGame 
+} from "src/handlers/lobbyHandlers.js";
 
 const router = Router();
 
 // --- Lobby ---
-router.get("/lobbies", getAllLobbies); // pobierz wszystkie lobby
-router.post("/lobbies", createLobby); // utwórz nowe lobby
-router.post("/lobbies/:name/join", joinLobby); // dołącz do lobby
-router.post("/lobbies/:name/start", leaveLobby); // rozpocznij grę
-// router.post("/lobbies/:name/leave"); // opuść lobby
+router.get("/lobbies", getAllLobbies);          // pobierz wszystkie lobby
+router.post("/lobbies", createLobby);           // utwórz nowe lobby
+router.post("/lobbies/:id/join", joinLobby);    // dołącz do lobby
+router.post("/lobbies/:id/start", startGame);   // rozpocznij grę
+router.post("/lobbies/:id/leave", leaveLobby);  // opuść lobby
 
-// // --- Blackjack ---
-// router.post("/lobbies/:name/deal");   // rozdanie kart
-// router.post("/lobbies/:name/hit");    // dobierz kartę
-// router.post("/lobbies/:name/stand");  // pas
-// router.post("/lobbies/:name/reset");  // zresetuj grę
+// --- Blackjack / przyszłe endpointy ---
+// router.post("/lobbies/:id/deal");
+// router.post("/lobbies/:id/hit");
+// router.post("/lobbies/:id/stand");
+// router.post("/lobbies/:id/reset");
 
 export default router;

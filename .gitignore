@@ -1,3 +1,16 @@
+# Node dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables
 .env
-dist
-node_modules
+.env.local
+
+# Logs
+logs/
+*.log
+
+# Editor files
+.vscode/
