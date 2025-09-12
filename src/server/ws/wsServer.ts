@@ -18,7 +18,10 @@ export const setupWebSocket = (server: HttpServer) => {
       }
 
       switch (data.type) {
+        case "create_lobby":
+        case "join_lobby": 
         case "joined_lobby":
+        case "leave_lobby": 
         case "ping_lobbies":
         case "lobby_update":
           handleLobbyMessage(ws, wss, data);
