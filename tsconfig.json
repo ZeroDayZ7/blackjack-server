@@ -6,10 +6,9 @@
     "moduleResolution": "NodeNext",
     "baseUrl": "./src",
     "paths": {
-      "@types": ["types/index.js"],
-      "@logger": ["utils/logger.js"],
+      "@types": ["ws/types/index.ts"],
+      "@logger": ["utils/logger.ts"],
       "@utils/*": ["utils/*"],
-      "@server/*": ["ws/*"],
       "@ws/*": ["ws/*"],
     },
     "outDir": "./dist",

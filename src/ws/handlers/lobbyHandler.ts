@@ -1,22 +1,22 @@
-import { lobbies } from "@ws/data/data.js";
-import { MyWebSocket } from "types/index.js";
-import logger from "@logger";
+import { lobbies } from '@ws/data/data.js';
+import { MyWebSocket } from '../types/index.js';
+import logger from '../../utils/logger.js';
 
 export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
   switch (msg.type) {
-    case "create_lobby":
+    case 'create_lobby':
       logger.info(`[CREATE_LOBBY] Próba utworzenia lobby przez: ${msg.nick}`);
 
       const existingLobby = lobbies.find((l) => l.players.includes(msg.nick));
       if (existingLobby) {
         logger.warn(
-          `[CREATE_LOBBY] ${msg.nick} jest już w lobby ${existingLobby.id}`
+          `[CREATE_LOBBY] ${msg.nick} jest już w lobby ${existingLobby.id}`,
         );
         ws.send(
           JSON.stringify({
-            type: "error",
-            message: "You are already in a lobby",
-          })
+            type: 'error',
+            message: 'You are already in a lobby',
+          }),
         );
         return;
       }
@@ -32,7 +32,7 @@ export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
       };
       lobbies.push(newLobby);
       logger.info(
-        `[CREATE_LOBBY] Lobby utworzone: ${JSON.stringify(newLobby, null, 2)}`
+        `[CREATE_LOBBY] Lobby utworzone: ${JSON.stringify(newLobby, null, 2)}`,
       );
 
       ws.lobbyId = newLobby.id;
@@ -40,10 +40,10 @@ export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
 
       ws.send(
         JSON.stringify({
-          type: "joined_lobby",
+          type: 'joined_lobby',
           nick: msg.nick,
           lobby: newLobby,
-        })
+        }),
       );
       logger.info(`[CREATE_LOBBY] Wysłano joined_lobby do twórcy: ${msg.nick}`);
 
@@ -51,15 +51,15 @@ export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
       logger.info(`[CREATE_LOBBY] Wysłano broadcastLobbyList do wszystkich`);
       break;
 
-    case "join_lobby":
+    case 'join_lobby':
       logger.info(
-        `[JOIN_LOBBY] Próba dołączenia: ${msg.nick} do lobby: ${msg.lobbyId}`
+        `[JOIN_LOBBY] Próba dołączenia: ${msg.nick} do lobby: ${msg.lobbyId}`,
       );
 
       const lobbyToJoin = lobbies.find((l) => l.id === msg.lobbyId);
       if (!lobbyToJoin) {
         logger.warn(`[JOIN_LOBBY] Lobby ${msg.lobbyId} nie istnieje`);
-        ws.send(JSON.stringify({ type: "error", message: "Lobby not found" }));
+        ws.send(JSON.stringify({ type: 'error', message: 'Lobby not found' }));
         return;
       }
 
@@ -67,9 +67,9 @@ export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
         logger.warn(`[JOIN_LOBBY] ${msg.nick} już jest w lobby ${msg.lobbyId}`);
         ws.send(
           JSON.stringify({
-            type: "error",
-            message: "You are already in this lobby",
-          })
+            type: 'error',
+            message: 'You are already in this lobby',
+          }),
         );
         return;
       }
@@ -80,28 +80,34 @@ export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
 
       logger.info(`[JOIN_LOBBY] ${msg.nick} dołączył do lobby: ${msg.lobbyId}`);
       logger.info(
-        `[JOIN_LOBBY] Aktualni gracze: ${JSON.stringify(lobbyToJoin.players)}`
+        `[JOIN_LOBBY] Aktualni gracze: ${JSON.stringify(lobbyToJoin.players)}`,
       );
 
       // wysyłamy pełny stan lobby do wszystkich w lobby
       broadcastLobbyUpdate(wss, lobbyToJoin);
       logger.info(
-        `[JOIN_LOBBY] Wysłano broadcastLobbyUpdate dla lobby: ${msg.lobbyId}`
+        `[JOIN_LOBBY] Wysłano broadcastLobbyUpdate dla lobby: ${msg.lobbyId}`,
       );
+
+      wss.clients.forEach((c: any) => {
+        if (c.readyState === 1) {
+          c.send(JSON.stringify({ type: 'lobbies_updated', lobbies }));
+        }
+      });
 
       ws.send(
         JSON.stringify({
-          type: "joined_lobby",
+          type: 'joined_lobby',
           nick: msg.nick,
           lobby: lobbyToJoin,
-        })
+        }),
       );
       logger.info(
-        `[JOIN_LOBBY] Wysłano joined_lobby do dołączającego: ${msg.nick}`
+        `[JOIN_LOBBY] Wysłano joined_lobby do dołączającego: ${msg.nick}`,
       );
       break;
 
-    case "leave_lobby":
+    case 'leave_lobby':
       logger.info(`[LEAVE_LOBBY] ${msg.nick} opuszcza lobby: ${msg.lobbyId}`);
 
       const leaveLobby = lobbies.find((l) => l.id === msg.lobbyId);
@@ -112,8 +118,8 @@ export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
 
       logger.info(
         `[LEAVE_LOBBY] Przed opuszczeniem gracze: ${JSON.stringify(
-          leaveLobby.players
-        )}`
+          leaveLobby.players,
+        )}`,
       );
 
       // Usuwamy gracza z listy
@@ -127,8 +133,8 @@ export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
 
       logger.info(
         `[LEAVE_LOBBY] Po opuszczeniu gracze: ${JSON.stringify(
-          leaveLobby.players
-        )}`
+          leaveLobby.players,
+        )}`,
       );
 
       // Jeśli lobby puste, usuwamy je
@@ -136,7 +142,7 @@ export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
         const index = lobbies.findIndex((l) => l.id === leaveLobby.id);
         lobbies.splice(index, 1);
         logger.info(
-          `[LEAVE_LOBBY] Lobby ${leaveLobby.id} usunięte (brak graczy)`
+          `[LEAVE_LOBBY] Lobby ${leaveLobby.id} usunięte (brak graczy)`,
         );
       }
 
@@ -148,23 +154,23 @@ export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
       if (leaveLobby.players.length > 0) {
         broadcastLobbyUpdate(wss, leaveLobby);
         logger.info(
-          `[LEAVE_LOBBY] Wysłano broadcastLobbyUpdate dla lobby: ${leaveLobby.id}`
+          `[LEAVE_LOBBY] Wysłano broadcastLobbyUpdate dla lobby: ${leaveLobby.id}`,
         );
       }
 
       // Informacja dla opuszczającego gracza
       ws.send(
         JSON.stringify({
-          type: "left_lobby",
+          type: 'left_lobby',
           lobbyId: msg.lobbyId,
           nick: msg.nick,
-        })
+        }),
       );
       logger.info(`[LEAVE_LOBBY] Wysłano left_lobby do gracza ${msg.nick}`);
       break;
 
-    case "ping_lobbies":
-      ws.send(JSON.stringify({ type: "lobby_list_update", lobbies }));
+    case 'ping_lobbies':
+      ws.send(JSON.stringify({ type: 'lobby_list_update', lobbies }));
       logger.info(`[PING_LOBBIES] Wysłano lobby_list_update`);
       break;
   }
@@ -174,14 +180,14 @@ export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
 function broadcastLobbyList(wss: any) {
   wss.clients.forEach((c: MyWebSocket) => {
     if (c.readyState === c.OPEN)
-      c.send(JSON.stringify({ type: "lobby_list_update", lobbies }));
+      c.send(JSON.stringify({ type: 'lobby_list_update', lobbies }));
   });
 }
 
 function broadcastLobbyUpdate(wss: any, lobby: any) {
   wss.clients.forEach((c: MyWebSocket) => {
     if (c.readyState === c.OPEN && lobby.players.includes(c.nick!)) {
-      c.send(JSON.stringify({ type: "lobby_update", lobby }));
+      c.send(JSON.stringify({ type: 'lobby_update', lobby }));
     }
   });
 }

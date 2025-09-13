@@ -1,40 +1,28 @@
-import { Server as HttpServer } from "http";
-import { WebSocketServer } from "ws";
-import { handleLobbyMessage } from "./handlers/lobbyHandler.js";
-import { handleGameMessage } from "./handlers/gameHandler.js";
+// setupWebSocket.ts
+import { Server as HttpServer } from 'http';
+import { WebSocketServer } from 'ws';
+import { routeWsMessage } from './wsRouter.js';
+import type { MyWebSocket, WsMessage } from '@ws/types/index.js';
 
 export const setupWebSocket = (server: HttpServer) => {
-  const wss = new WebSocketServer({ server, path: "/ws" });
+  const wss = new WebSocketServer({ server, path: '/ws' });
 
-  wss.on("connection", (ws: any) => {
-    console.log("New WS connection");
+  wss.on('connection', (ws: MyWebSocket) => {
+    console.log('✅ New WS connection');
 
-    ws.on("message", (msg: string) => {
-      let data;
+    ws.on('message', (raw: string) => {
+      let data: WsMessage;
       try {
-        data = JSON.parse(msg);
+        data = JSON.parse(raw.toString());
       } catch {
+        console.warn('❌ Invalid WS message:', raw);
         return;
       }
 
-      switch (data.type) {
-        case "create_lobby":
-        case "join_lobby": 
-        case "leave_lobby": 
-        case "ping_lobbies":
-          handleLobbyMessage(ws, wss, data);
-          break;
-        case "start_game":
-        case "player_action":
-        case "subscribe_to_game": 
-          handleGameMessage(ws, wss, data);
-          break;
-        default:
-          console.warn("Unknown WS message type:", data.type);
-      }
+      routeWsMessage(ws, wss, data);
     });
 
-    ws.on("close", () => console.log("Client disconnected"));
+    ws.on('close', () => console.log('👋 Client disconnected'));
   });
 
   return wss;
