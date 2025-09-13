@@ -1,4 +1,4 @@
-import type { Card } from "../../../types/types.js";
+import type { Card } from "@types";
 
 export const generateDeck = (): Card[] => {
   const suits: Card["suit"][] = ["Hearts", "Diamonds", "Clubs", "Spades"];

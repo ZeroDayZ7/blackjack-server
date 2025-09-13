@@ -1,0 +1,439 @@
+
+
+
+
+───────────── data.ts ─────────────
+// src/data/lobbies.ts
+import type { Lobby } from "types/index.js";
+import { GameService } from "../services/gameService.js";
+
+export const lobbies: Lobby[] = [];
+export const games: Record<string, GameService> = {};
+
+───────────── gameHandler.ts ─────────────
+import logger from "@utils/logger.js";
+import { GameService } from "../services/gameService.js";
+import { games } from "@server/data/data.js";
+ 
+export const handleGameMessage = (ws: any, wss: any, msg: any) => {
+  logger.info(
+    `[GAME_MESSAGE] Typ: ${msg.type}, od: ${ws.nick || "unknown"}, lobbyId: ${
+      msg.lobbyId
+    }`
+  );
+
+  switch (msg.type) {
+    case "start_game":
+      logger.info(`[START_GAME] Próba startu gry dla lobby: ${msg.lobbyId}`);
+
+      // lobby.started = true;
+
+      // Tworzymy nowy serwis gry i zapisujemy w globalnym obiekcie
+      const playerNicks = Array.from(wss.clients)
+        .filter((c: any) => c.lobbyId === msg.lobbyId)
+        .map((c: any) => c.nick);
+
+      const gameService = new GameService(msg.lobbyId, playerNicks);
+      games[msg.lobbyId] = gameService;
+
+      // Rozsyłamy stan gry do wszystkich w lobby
+      wss.clients.forEach((client: any) => {
+        if (client.readyState !== 1 || client.lobbyId !== msg.lobbyId) return;
+
+        // publiczny stan
+        const publicState = gameService.getPublicState(client.nick);
+        client.send(
+          JSON.stringify({ type: "game_state_public", gameState: publicState })
+        );
+
+        // prywatny stan (karty gracza)
+        const privateHand = gameService.getPrivateHand(client.nick);
+        client.send(
+          JSON.stringify({ type: "game_state_private", hand: privateHand })
+        );
+
+        logger.info(`[START_GAME] Wysłano game_state do: ${client.nick}`);
+      });
+      break;
+
+    case "subscribe_to_game":
+      ws.lobbyId = msg.lobbyId;
+      ws.send(
+        JSON.stringify({ type: "subscribed_to_game", lobbyId: msg.lobbyId })
+      );
+      logger.info(
+        `[SUBSCRIBE_TO_GAME] Klient ${ws.nick} subskrybuje grę w lobby: ${msg.lobbyId}`
+      );
+      break;
+
+    case "player_action":
+      const service = games[msg.lobbyId];
+      if (!service) {
+        logger.warn(`[PLAYER_ACTION] Brak gry dla lobby ${msg.lobbyId}`);
+        return;
+      }
+
+      // TODO: implementacja hit/stand/double itp.
+      logger.info(
+        `[PLAYER_ACTION] Akcja od ${ws.nick} w lobby ${
+          msg.lobbyId
+        }: ${JSON.stringify(msg.action)}`
+      );
+
+      // przykładowo po akcji można odświeżyć public/private state
+      wss.clients.forEach((client: any) => {
+        if (client.readyState !== 1 || client.lobbyId !== msg.lobbyId) return;
+        client.send(
+          JSON.stringify({
+            type: "game_state_public",
+            gameState: service.getPublicState(client.nick),
+          })
+        );
+        client.send(
+          JSON.stringify({
+            type: "game_state_private",
+            hand: service.getPrivateHand(client.nick),
+          })
+        );
+      });
+      break;
+
+    default:
+      logger.warn(
+        `[GAME_MESSAGE] Nieobsługiwany typ wiadomości: ${msg.type} od ${ws.nick}`
+      );
+  }
+};
+
+
+───────────── lobbyHandler.ts ─────────────
+import { lobbies } from "@ws/data/data.js";
+import { MyWebSocket } from "types/index.js";
+import logger from "@logger";
+
+export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {
+  switch (msg.type) {
+    case "create_lobby":
+      logger.info(`[CREATE_LOBBY] Próba utworzenia lobby przez: ${msg.nick}`);
+
+      const existingLobby = lobbies.find((l) => l.players.includes(msg.nick));
+      if (existingLobby) {
+        logger.warn(
+          `[CREATE_LOBBY] ${msg.nick} jest już w lobby ${existingLobby.id}`
+        );
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            message: "You are already in a lobby",
+          })
+        );
+        return;
+      }
+
+      const newLobby = {
+        id: crypto.randomUUID(),
+        name: msg.lobbyName,
+        players: [msg.nick],
+        maxPlayers: msg.maxPlayers || 2,
+        useBots: msg.useBots ?? true,
+        started: false,
+        host: msg.nick,
+      };
+      lobbies.push(newLobby);
+      logger.info(
+        `[CREATE_LOBBY] Lobby utworzone: ${JSON.stringify(newLobby, null, 2)}`
+      );
+
+      ws.lobbyId = newLobby.id;
+      ws.nick = msg.nick;
+
+      ws.send(
+        JSON.stringify({
+          type: "joined_lobby",
+          nick: msg.nick,
+          lobby: newLobby,
+        })
+      );
+      logger.info(`[CREATE_LOBBY] Wysłano joined_lobby do twórcy: ${msg.nick}`);
+
+      broadcastLobbyList(wss);
+      logger.info(`[CREATE_LOBBY] Wysłano broadcastLobbyList do wszystkich`);
+      break;
+
+    case "join_lobby":
+      logger.info(
+        `[JOIN_LOBBY] Próba dołączenia: ${msg.nick} do lobby: ${msg.lobbyId}`
+      );
+
+      const lobbyToJoin = lobbies.find((l) => l.id === msg.lobbyId);
+      if (!lobbyToJoin) {
+        logger.warn(`[JOIN_LOBBY] Lobby ${msg.lobbyId} nie istnieje`);
+        ws.send(JSON.stringify({ type: "error", message: "Lobby not found" }));
+        return;
+      }
+
+      if (lobbyToJoin.players.includes(msg.nick)) {
+        logger.warn(`[JOIN_LOBBY] ${msg.nick} już jest w lobby ${msg.lobbyId}`);
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            message: "You are already in this lobby",
+          })
+        );
+        return;
+      }
+
+      lobbyToJoin.players.push(msg.nick);
+      ws.lobbyId = lobbyToJoin.id;
+      ws.nick = msg.nick;
+
+      logger.info(`[JOIN_LOBBY] ${msg.nick} dołączył do lobby: ${msg.lobbyId}`);
+      logger.info(
+        `[JOIN_LOBBY] Aktualni gracze: ${JSON.stringify(lobbyToJoin.players)}`
+      );
+
+      // wysyłamy pełny stan lobby do wszystkich w lobby
+      broadcastLobbyUpdate(wss, lobbyToJoin);
+      logger.info(
+        `[JOIN_LOBBY] Wysłano broadcastLobbyUpdate dla lobby: ${msg.lobbyId}`
+      );
+
+      ws.send(
+        JSON.stringify({
+          type: "joined_lobby",
+          nick: msg.nick,
+          lobby: lobbyToJoin,
+        })
+      );
+      logger.info(
+        `[JOIN_LOBBY] Wysłano joined_lobby do dołączającego: ${msg.nick}`
+      );
+      break;
+
+    case "leave_lobby":
+      logger.info(`[LEAVE_LOBBY] ${msg.nick} opuszcza lobby: ${msg.lobbyId}`);
+
+      const leaveLobby = lobbies.find((l) => l.id === msg.lobbyId);
+      if (!leaveLobby) {
+        logger.warn(`[LEAVE_LOBBY] Nie znaleziono lobby ${msg.lobbyId}`);
+        return;
+      }
+
+      logger.info(
+        `[LEAVE_LOBBY] Przed opuszczeniem gracze: ${JSON.stringify(
+          leaveLobby.players
+        )}`
+      );
+
+      // Usuwamy gracza z listy
+      leaveLobby.players = leaveLobby.players.filter((p) => p !== msg.nick);
+
+      // Jeśli opuszczający był hostem i są inni gracze, wybieramy nowego hosta
+      if (leaveLobby.host === msg.nick && leaveLobby.players.length > 0) {
+        leaveLobby.host = leaveLobby.players[0]; // kolejność według tablicy
+        logger.info(`[LEAVE_LOBBY] Nowy host: ${leaveLobby.host}`);
+      }
+
+      logger.info(
+        `[LEAVE_LOBBY] Po opuszczeniu gracze: ${JSON.stringify(
+          leaveLobby.players
+        )}`
+      );
+
+      // Jeśli lobby puste, usuwamy je
+      if (leaveLobby.players.length === 0) {
+        const index = lobbies.findIndex((l) => l.id === leaveLobby.id);
+        lobbies.splice(index, 1);
+        logger.info(
+          `[LEAVE_LOBBY] Lobby ${leaveLobby.id} usunięte (brak graczy)`
+        );
+      }
+
+      // Broadcast aktualnej listy lobby wszystkim klientom
+      broadcastLobbyList(wss);
+      logger.info(`[LEAVE_LOBBY] Wysłano broadcastLobbyList`);
+
+      // Broadcast aktualizacji samego lobby dla pozostających graczy
+      if (leaveLobby.players.length > 0) {
+        broadcastLobbyUpdate(wss, leaveLobby);
+        logger.info(
+          `[LEAVE_LOBBY] Wysłano broadcastLobbyUpdate dla lobby: ${leaveLobby.id}`
+        );
+      }
+
+      // Informacja dla opuszczającego gracza
+      ws.send(
+        JSON.stringify({
+          type: "left_lobby",
+          lobbyId: msg.lobbyId,
+          nick: msg.nick,
+        })
+      );
+      logger.info(`[LEAVE_LOBBY] Wysłano left_lobby do gracza ${msg.nick}`);
+      break;
+
+    case "ping_lobbies":
+      ws.send(JSON.stringify({ type: "lobby_list_update", lobbies }));
+      logger.info(`[PING_LOBBIES] Wysłano lobby_list_update`);
+      break;
+  }
+};
+
+// helpery
+function broadcastLobbyList(wss: any) {
+  wss.clients.forEach((c: MyWebSocket) => {
+    if (c.readyState === c.OPEN)
+      c.send(JSON.stringify({ type: "lobby_list_update", lobbies }));
+  });
+}
+
+function broadcastLobbyUpdate(wss: any, lobby: any) {
+  wss.clients.forEach((c: MyWebSocket) => {
+    if (c.readyState === c.OPEN && lobby.players.includes(c.nick!)) {
+      c.send(JSON.stringify({ type: "lobby_update", lobby }));
+    }
+  });
+}
+
+
+───────────── deck.ts ─────────────
+import type { Card } from "@types";
+
+export const generateDeck = (): Card[] => {
+  const suits: Card["suit"][] = ["Hearts", "Diamonds", "Clubs", "Spades"];
+  const values: Card["value"][] = [
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "J",
+    "Q",
+    "K",
+    "A",
+  ];
+  const deck: Card[] = [];
+  for (const suit of suits) {
+    for (const value of values) {
+      deck.push({ suit, value });
+    }
+  }
+  return deck.sort(() => Math.random() - 0.5); // tasowanie
+};
+
+
+───────────── gameService.ts ─────────────
+import type { GameState, PlayerState } from "types/index.js";
+import { generateDeck } from "./deck.js";
+
+export class GameService {
+  private state: GameState;
+
+  constructor(lobbyId: string, players: string[]) {
+    const deck = generateDeck();
+    const playerHands: Record<string, PlayerState> = {};
+
+    players.forEach((nick) => {
+      playerHands[nick] = {
+        nick,
+        hand: [deck.pop()!, deck.pop()!],
+        score: 0,
+        status: "waiting",
+        bet: 0,
+        balance: 1000, // startowy balans
+      };
+    });
+
+    const dealer = { hand: [deck.pop()!, deck.pop()!], score: 0 };
+
+    this.state = {
+      lobbyId,
+      players: playerHands,
+      dealer,
+      currentPlayerNick: players[0],
+      gameStatus: "player_turn",
+      winner: null,
+      deck,
+    };
+  }
+
+  getState(): GameState {
+    return this.state;
+  }
+
+  getPublicState(forNick: string) {
+    const { players, dealer, lobbyId, currentPlayerNick, gameStatus, winner } =
+      this.state;
+    return {
+      lobbyId,
+      players: Object.fromEntries(
+        Object.entries(players).map(([n, p]) => [
+          n,
+          { score: p.score, status: p.status },
+        ])
+      ),
+      dealer: { hand: ["?", dealer.hand[1]], score: dealer.score },
+      currentPlayerNick,
+      gameStatus,
+      winner,
+    };
+  }
+
+  getPrivateHand(nick: string) {
+    return this.state.players[nick].hand;
+  }
+
+  // TODO: metody typu hit(), stand(), double(), updateScores(), nextTurn(), endGame()
+}
+
+
+───────────── wsServer.ts ─────────────
+import { Server as HttpServer } from "http";
+import { WebSocketServer } from "ws";
+import { handleLobbyMessage } from "./handlers/lobbyHandler.js";
+import { handleGameMessage } from "./handlers/gameHandler.js";
+
+export const setupWebSocket = (server: HttpServer) => {
+  const wss = new WebSocketServer({ server, path: "/ws" });
+
+  wss.on("connection", (ws: any) => {
+    console.log("New WS connection");
+
+    ws.on("message", (msg: string) => {
+      let data;
+      try {
+        data = JSON.parse(msg);
+      } catch {
+        return;
+      }
+
+      switch (data.type) {
+        case "create_lobby":
+        case "join_lobby": 
+        case "joined_lobby":
+        case "leave_lobby": 
+        case "ping_lobbies":
+        case "lobby_update":
+          handleLobbyMessage(ws, wss, data);
+          break;
+        case "start_game":
+        case "player_action":
+        case "subscribe_to_game": 
+          handleGameMessage(ws, wss, data);
+          break;
+        default:
+          console.warn("Unknown WS message type:", data.type);
+      }
+    });
+
+    ws.on("close", () => console.log("Client disconnected"));
+  });
+
+  return wss;
+};
+
+

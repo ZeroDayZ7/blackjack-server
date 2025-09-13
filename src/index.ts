@@ -1,7 +1,8 @@
 import http from "http";
 import app from "./app.js";
 import { env } from "./config/env.js";
-import { setupWebSocket } from "./server/ws/wsServer.js";
+import { setupWebSocket } from "./ws/wsServer.js";
+import logger from "@logger";
 
 const PORT = env.PORT || 5000;
 
@@ -12,5 +13,5 @@ const wss = setupWebSocket(server);
 app.set("wss", wss);
 
 server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT} [${env.NODE_ENV}]`);
+  logger.info(`Server running on http://localhost:${PORT} [${env.NODE_ENV}]`);
 });

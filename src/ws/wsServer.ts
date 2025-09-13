@@ -1,5 +1,5 @@
 import { Server as HttpServer } from "http";
-import { Server, WebSocketServer } from "ws";
+import { WebSocketServer } from "ws";
 import { handleLobbyMessage } from "./handlers/lobbyHandler.js";
 import { handleGameMessage } from "./handlers/gameHandler.js";
 
@@ -20,10 +20,8 @@ export const setupWebSocket = (server: HttpServer) => {
       switch (data.type) {
         case "create_lobby":
         case "join_lobby": 
-        case "joined_lobby":
         case "leave_lobby": 
         case "ping_lobbies":
-        case "lobby_update":
           handleLobbyMessage(ws, wss, data);
           break;
         case "start_game":

@@ -1,5 +1,5 @@
-import { lobbies } from "../../data/data.js";
-import { MyWebSocket } from "@types";
+import { lobbies } from "@ws/data/data.js";
+import { MyWebSocket } from "types/index.js";
 import logger from "@logger";
 
 export const handleLobbyMessage = (ws: MyWebSocket, wss: any, msg: any) => {

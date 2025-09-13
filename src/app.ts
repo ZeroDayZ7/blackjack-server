@@ -2,8 +2,6 @@ import express, { NextFunction, Request, Response } from "express";
 import helmet from "helmet";
 import cors from "cors";
 
-import { env } from "./config/env.js";
-import apiRouter from "./routes/api.js";
 import { globalLimiter } from "./middleware/globalLimiter.js";
 
 const app = express();
@@ -29,8 +27,6 @@ app.get("/health", (_req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
   });
 });
-
-app.use("/api", apiRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
