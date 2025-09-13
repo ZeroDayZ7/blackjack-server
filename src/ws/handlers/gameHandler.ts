@@ -66,6 +66,8 @@ export const handleGameMessage = (
       logger.info(
         `[GAME_MESSAGE] Public state dla lobby ${msg.lobbyId}: ${JSON.stringify(
           publicState,
+          null,
+          2,
         )}`,
       );
       wss.clients.forEach((c: any) => {
@@ -84,8 +86,9 @@ export const handleGameMessage = (
 
       break;
     }
+
     // #region 'subscribe_to_game'
-    case 'subscribe_to_game':
+    case 'subscribe_to_game': {
       if (!msg.lobbyId) {
         logger.error(
           `[GAME_MESSAGE] Brak lobbyId w wiadomości typu ${msg.type}`,
@@ -108,10 +111,63 @@ export const handleGameMessage = (
         );
       }
       break;
+    }
+
+    // #region 'player_action'
+    case 'player_action': {
+      if (!msg.lobbyId || !ws.nick) {
+        logger.warn(`[PLAYER_ACTION] Brak lobbyId lub nick w wiadomości`);
+        return;
+      }
+
+      const game = games[msg.lobbyId];
+      if (!game) {
+        logger.warn(
+          `[PLAYER_ACTION] Nie znaleziono gry dla lobby ${msg.lobbyId}`,
+        );
+        return;
+      }
+
+      switch (msg.action) {
+        case 'hit':
+          game.hit(ws.nick);
+          logger.info(`[PLAYER_ACTION] ${ws.nick} chose HIT`);
+          break;
+        case 'stand':
+          game.stand(ws.nick);
+          logger.info(`[PLAYER_ACTION] ${ws.nick} chose STAND`);
+          break;
+        default:
+          logger.warn(`[PLAYER_ACTION] Nieznana akcja: ${msg.action}`);
+      }
+
+      // wysyłamy aktualny publiczny stan gry do wszystkich w lobby
+      const publicState = game.getPublicState();
+      wss.clients.forEach((c: any) => {
+        if (c.readyState === 1 && c.lobbyId === msg.lobbyId) {
+          c.send(
+            JSON.stringify({
+              type: 'game_state_public',
+              gameState: publicState,
+            }),
+          );
+        }
+      });
+
+      // wysyłamy prywatny stan dla klikającego gracza
+      const playerState = game.getPlayer(ws.nick);
+      if (playerState) {
+        ws.send(JSON.stringify({ type: 'game_state_private', playerState }));
+      }
+
+      break;
+    }
+
     // #region 'default'
-    default:
+    default: {
       logger.warn(
         `[GAME_MESSAGE] Nieobsługiwany typ wiadomości: ${msg.type} od ${ws.nick}`,
       );
+    }
   }
 };
