@@ -1,5 +1,6 @@
 import type { GameState, PlayerState, PlayerStatus, Card } from '@types';
 import { generateDeck } from './deck.js';
+import logger from '@logger';
 
 export class GameService {
   private state: GameState;

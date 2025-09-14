@@ -4,7 +4,6 @@ import logger from '../../utils/logger.js';
 import { GameService } from '../services/gameService.js';
 import { games, lobbies } from '@ws/data/data.js';
 
-// export const handleGameMessage = (ws: MyWebSocket, wss: WebSocket.Server, msg: any) => {
 export const handleGameMessage = (
   ws: MyWebSocket,
   wss: Server,
