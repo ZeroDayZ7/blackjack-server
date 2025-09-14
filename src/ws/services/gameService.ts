@@ -1,4 +1,10 @@
-import type { GameState, PlayerState, PlayerStatus, Card } from '@types';
+import type {
+  GameState,
+  PlayerState,
+  PlayerStatus,
+  Card,
+  DealerState,
+} from '@types';
 import { generateDeck } from './deck.js';
 import logger from '@logger';
 
@@ -7,24 +13,47 @@ export class GameService {
   private readyPlayers: Set<string> = new Set();
   private allPlayersReady = false;
   private countdownTimer: NodeJS.Timeout | null = null;
-
+  private roundInProgress = false;
+  // #region constructor
   constructor(lobbyId: string, playerNicks: string[]) {
+    // Generujemy deck
     const deck = generateDeck();
+
     const playerHands: Record<string, PlayerState> = {};
 
-    playerNicks.forEach((nick) => {
+    playerNicks.forEach((nick, index) => {
+      let hand: Card[] = [];
+
+      if (index === 0) {
+        // Pierwszy gracz dostaje wymuszonego blackjacka: As + Król
+        hand = [
+          { suit: 'Spades', value: 'A' },
+          { suit: 'Hearts', value: 'K' },
+        ];
+      } else {
+        // Reszta graczy dobiera 2 losowe karty z decku
+        hand = [deck.pop()!, deck.pop()!];
+      }
+
+      const score = this.calculateScore(hand);
+
       playerHands[nick] = {
         nick,
-        hand: [],
-        score: 0,
-        status: 'waiting' as PlayerStatus,
+        hand,
+        score,
+        status: score === 21 ? 'blackjack' : 'waiting',
         result: null,
         bet: 0,
         balance: 1000,
       };
     });
 
-    const dealer = { hand: [], score: 0 };
+    // Dealer dobiera 2 karty z decku
+    const dealerHand = [deck.pop()!, deck.pop()!];
+    const dealer = {
+      hand: dealerHand,
+      score: this.calculateScore(dealerHand),
+    };
 
     this.state = {
       lobbyId,
@@ -36,11 +65,12 @@ export class GameService {
       deck,
     };
 
-    this.dealInitialCards();
+    // Jeśli pierwszy gracz ma blackjacka, automatycznie przechodzimy do kolejnego ruchu
     this.checkInitialBlackjack();
   }
-  // ---------------- Public ----------------
-  // region Public
+  // ==============================================
+  // #region ==== Public ====
+  // ==============================================
   /** Pełny stan gry */
   public getState(): GameState {
     return this.state;
@@ -48,21 +78,8 @@ export class GameService {
   // region getPublicState
   /** Publiczny stan gry dla wszystkich graczy */
   public getPublicState() {
-    const { players, dealer, lobbyId, currentPlayerNick, gameStatus, winner } =
+    const { players, lobbyId, currentPlayerNick, gameStatus, winner } =
       this.state;
-
-    // Ukrywanie kart dealera dopóki nie nadejdzie jego tura lub gra się nie skończy
-    const isDealerTurn =
-      gameStatus === 'dealer_turn' || gameStatus === 'finished';
-    const dealerHandForPublic = isDealerTurn
-      ? dealer.hand
-      : [
-          dealer.hand[0] || null, // Pierwsza karta widoczna
-          { suit: 'hidden', value: 'hidden' }, // Druga karta zakryta
-        ];
-    const dealerScoreForPublic = isDealerTurn
-      ? dealer.score
-      : this.calculateScore([dealer.hand[0]]); // wynik z widocznej karty
 
     return {
       lobbyId,
@@ -73,7 +90,7 @@ export class GameService {
         Object.entries(players).map(([nick, p]) => [
           nick,
           {
-            hand: p.hand, // Pełne ręce graczy
+            hand: p.hand,
             score: p.score,
             status: p.status,
             bet: p.bet,
@@ -81,45 +98,37 @@ export class GameService {
           },
         ]),
       ),
-      dealer: {
-        hand: dealerHandForPublic,
-        score: dealerScoreForPublic,
-      },
+      dealer: this.getDealerPublicState(),
     };
   }
   // ---------------- Ready + Countdown ----------------
-  // region playerReady
+  // #region playerReady
   public playerReady(nick: string) {
-    // Ignorujemy boty
     if (nick.startsWith('Bot')) return;
 
-    // Dodajemy gracza do gotowych
     this.readyPlayers.add(nick);
 
-    // Pobieramy tylko graczy-człowieka
     const humanPlayers = Object.keys(this.state.players).filter(
       (n) => !n.startsWith('Bot'),
     );
 
-    // Sprawdzamy czy wszyscy ludzie są gotowi
     if (this.readyPlayers.size >= humanPlayers.length) {
       this.allPlayersReady = true;
-
-      // Wyczyść gotowości, żeby nie blokować kolejnej rundy
-      this.readyPlayers.clear();
-
-      // Start następnej rundy
+      this.clearReady();
       this.startNextRound();
     }
   }
-
+  // #region resetReady
   public resetReady() {
     this.readyPlayers.clear();
     this.allPlayersReady = false;
   }
-
+  // #region startCountdown
   public startCountdown(wss: any, lobbyId: string) {
+    if (this.roundInProgress) return; // nie startuj, jeśli runda już trwa
+
     let countdown = 15;
+
     this.countdownTimer = setInterval(() => {
       wss.clients.forEach((c: any) => {
         if (c.readyState === 1 && c.lobbyId === lobbyId) {
@@ -131,14 +140,16 @@ export class GameService {
 
       if (countdown < 0 || this.allPlayersReady) {
         clearInterval(this.countdownTimer!);
+        this.clearReady();
         this.startNextRound();
-        this.resetReady();
       }
     }, 1000);
   }
 
-  // region startNextRound
+  // #region startNextRound
   public startNextRound() {
+    if (this.roundInProgress) return;
+    this.roundInProgress = true;
     logger.info(`[GAME] Starting next round for lobby ${this.state.lobbyId}`);
 
     const playerNicks = Object.keys(this.state.players);
@@ -180,11 +191,12 @@ export class GameService {
     const firstPlayer = playerNicks[0];
     if (firstPlayer?.startsWith('Bot')) this.playBot(firstPlayer);
   }
-
+  // #region getCurrentPlayer
   // Getter dla botów
   public getCurrentPlayer(): string | null {
     return this.state.currentPlayerNick;
   }
+  // #region resetGame
   // Reset game
   public resetGame() {
     const playerNicks = Object.keys(this.state.players);
@@ -210,82 +222,110 @@ export class GameService {
     this.dealInitialCards();
     this.checkInitialBlackjack();
   }
+  // #region removePlayer
+  /** Usuwa gracza z gry */
+  public removePlayer(nick: string) {
+    delete this.state.players[nick];
+    // jeśli gracz był gotowy, usuń go z readyPlayers
+    this.readyPlayers.delete(nick);
 
+    // jeśli currentPlayerNick to właśnie ten gracz, przejdź do następnego
+    if (this.state.currentPlayerNick === nick) {
+      this.advanceTurn();
+    }
+  }
+  // #region drawCard
   /** Dobranie karty graczowi lub dealerowi */
   public drawCard(nick?: string): Card {
     const card = this.state.deck.pop()!;
+
     if (nick) {
       const player = this.state.players[nick];
       player.hand.push(card);
       player.score = this.calculateScore(player.hand);
-      if (player.score > 21) player.status = 'bust';
+      this.updatePlayerStatus(player);
     } else {
-      this.state.dealer.hand.push(card);
-      this.state.dealer.score = this.calculateScore(this.state.dealer.hand);
+      const dealer = this.state.dealer;
+      dealer.hand.push(card);
+      dealer.score = this.calculateScore(dealer.hand);
+      this.updateDealerStatus(dealer);
     }
+
     return card;
   }
-
+  // #region hit
   /** Hit: gracz dobiera kartę */
-  public hit(nick: string) {
+  public hit(nick: string, wss?: any) {
+    const player = this.state.players[nick];
+    if (!player || player.status !== 'waiting') {
+      this.advanceTurn(wss);
+      return;
+    }
+
     this.drawCard(nick);
-    const player = this.state.players[nick];
-    if (player.score > 21) this.nextTurn();
+    if (player.score >= 21)
+      player.status = player.score > 21 ? 'bust' : 'stand';
+    this.advanceTurn(wss);
   }
-
+  // #region stand
   /** Stand: gracz kończy turę */
-  public stand(nick: string) {
-    this.state.players[nick].status = 'stand';
-    this.nextTurn();
+  public stand(nick: string, wss?: any) {
+    const player = this.state.players[nick];
+    if (!player || player.status !== 'waiting') {
+      this.advanceTurn(wss);
+      return;
+    }
+    player.status = 'stand';
+    this.advanceTurn(wss);
   }
 
+  // #region double
   /** Double: podwaja stawkę, dobiera kartę i kończy turę */
-  public double(nick: string) {
+  public double(nick: string, wss?: any) {
     const player = this.state.players[nick];
+    if (!player || player.status !== 'waiting') return;
+
     if (player.balance >= player.bet) {
       player.balance -= player.bet;
       player.bet *= 2;
       this.drawCard(nick);
       player.status = 'double';
-      this.nextTurn();
+      this.advanceTurn(wss);
     }
   }
-
-  /** Przechodzi do kolejnego gracza lub tury dealera */
-  // w GameService
-  public nextTurn() {
-    const players = Object.values(this.state.players);
-    const currentIndex = players.findIndex(
-      (p) => p.nick === this.state.currentPlayerNick,
-    );
-
-    for (let i = currentIndex + 1; i < players.length; i++) {
-      if (players[i].status === 'waiting') {
-        this.state.currentPlayerNick = players[i].nick;
-
-        if (players[i].nick.startsWith('Bot')) {
-          this.playBot(players[i].nick); // bot wykonuje ruch od razu
-          // po ruchu bota przechodzimy do następnego gracza
-          this.nextTurn();
-        }
-
-        return; // jeśli to człowiek, czekamy na akcję frontend
-      }
-    }
-
-    // wszyscy gracze skończyli → ruch dealera
-    this.state.currentPlayerNick = null;
-    this.state.gameStatus = 'dealer_turn';
-    this.playDealer();
-  }
-
+  // #region getPlayer
   /** Pobranie konkretnego gracza */
   public getPlayer(nick: string) {
     return this.state.players[nick] || null;
   }
-  // region Private
+  // #region proceedNextTurn
+  public proceedNextTurn() {
+    this.advanceTurn(); // teraz wywołanie jest jawne i w pełni kontrolowane
+  }
+
+  // ==============================================
+  // #region ==== Private ====
+  // ==============================================
+
+  // #region updatePlayerStatus
+  private updatePlayerStatus(player: PlayerState) {
+    if (player.score === 21 && player.hand.length === 2) {
+      player.status = 'blackjack';
+    } else if (player.score > 21) {
+      player.status = 'bust';
+    }
+  }
+  // #region updateDealerStatus
+  // Jeśli dealer potrzebuje statusu
+  private updateDealerStatus(dealer: DealerState) {
+    // np. można ustawić flagę 'bust', jeśli dealer > 21
+    if (dealer.score > 21) {
+      dealer.status = 'bust';
+    }
+  }
+  // #region playDealer
   /** Dealer dobiera według reguł blackjack */
-  private playDealer() {
+  private playDealer(wss?: any) {
     const dealer = this.state.dealer;
 
     while (dealer.score < 17) {
@@ -294,8 +334,26 @@ export class GameService {
 
     this.state.gameStatus = 'finished';
     this.determineWinner();
+    if (wss) this.broadcastGameState(wss);
+  }
+  // #region broadcastGameState
+  private broadcastGameState(wss: any) {
+    const publicState = this.getPublicState();
+
+    wss.clients.forEach((c: any) => {
+      if (c.readyState === 1 && c.lobbyId === this.state.lobbyId) {
+        c.send(
+          JSON.stringify({ type: 'game_state_public', gameState: publicState }),
+        );
+
+        const playerState = this.getPlayer(c.nick);
+        if (playerState)
+          c.send(JSON.stringify({ type: 'game_state_private', playerState }));
+      }
+    });
   }
 
+  // #region determineWinner
   /** Wyłonienie zwycięzcy */
   private determineWinner() {
     const dealerScore = this.state.dealer.score;
@@ -326,50 +384,60 @@ export class GameService {
       else if (results[nick] === 'push') p.status = 'stand';
     });
   }
-  // region checkInitialBlackjack
+
+  // #region checkInitialBlackjack
   // Private: checks for initial blackjack after dealing first two cards
-  private checkInitialBlackjack() {
+  public checkInitialBlackjack(wss?: any) {
     const dealerBlackjack =
       this.state.dealer.score === 21 && this.state.dealer.hand.length === 2;
 
     const playerBlackjacks: string[] = [];
+
     Object.entries(this.state.players).forEach(([nick, player]) => {
       if (player.score === 21 && player.hand.length === 2) {
         playerBlackjacks.push(nick);
-        this.state.players[nick].status = 'blackjack';
+        player.status = 'blackjack';
+        player.result = 'win';
       }
     });
 
+    if (wss) this.broadcastGameState(wss);
+
     if (dealerBlackjack) {
-      // Dealer ma blackjacka -> odkrywa od razu, gra skończona
       this.state.currentPlayerNick = null;
       this.state.gameStatus = 'finished';
-
       if (playerBlackjacks.length) {
-        // gracze z blackjackiem = push, reszta przegrywa
-        playerBlackjacks.forEach(
-          (nick) => (this.state.players[nick].result = 'push'),
-        );
-
+        playerBlackjacks.forEach((nick) => {
+          this.state.players[nick].result = 'push';
+        });
         this.state.winner = 'push';
       } else {
         this.state.winner = 'dealer';
-        Object.keys(this.state.players).forEach(
-          (nick) => (this.state.players[nick].status = 'bust'),
-        );
+        Object.values(this.state.players).forEach((p) => (p.status = 'bust'));
       }
+      if (wss) this.broadcastGameState(wss);
       return true;
     }
 
-    if (playerBlackjacks.length) {
-      // Gracze z blackjackiem stoją od razu,
-      // ale reszta gra normalnie
-      return false;
+    // Szukamy pierwszego aktywnego gracza
+    const nextPlayer = Object.values(this.state.players).find(
+      (p) => p.status === 'waiting',
+    );
+    if (!nextPlayer) {
+      this.state.currentPlayerNick = null;
+      this.state.gameStatus = 'dealer_turn';
+      if (wss) this.broadcastGameState(wss);
+    } else {
+      this.state.currentPlayerNick = nextPlayer.nick;
+      this.state.gameStatus = 'player_turn';
+      if (nextPlayer.nick.startsWith('Bot')) {
+        this.playBot(nextPlayer.nick, wss); // teraz bot wykonuje ruch + broadcast
+      }
     }
 
-    return false; // brak blackjacka na start
+    return true;
   }
-
+  // #region dealInitialCards
   /** Rozdanie początkowe: 2 karty dla każdego gracza i dealera */
   private dealInitialCards() {
     const { deck, players, dealer } = this.state;
@@ -386,7 +454,7 @@ export class GameService {
     }
   }
 
-  /** Oblicza wartość ręki gracza */
+  // #region calculateScore
   /** Oblicza wartość ręki gracza */
   private calculateScore(hand: Card[]): number {
     if (!hand || hand.length === 0) return 0;
@@ -416,21 +484,69 @@ export class GameService {
     return total;
   }
 
+  // #region playBot
   // Logika dla bota
-  private playBot(nick: string) {
-    const player = this.state.players[nick];
-    if (!player || player.status !== 'waiting') return;
+  private playBot(botNick: string, wss?: any) {
+    const bot = this.state.players[botNick];
+    if (!bot) return;
 
-    while (player.score < 17) {
-      // prosta logika dla bota
-      this.drawCard(nick);
-    }
-    player.status = 'stand';
+    // logika decyzji bota
+    this.drawCard(botNick);
+
+    // status bota automatycznie aktualizowany w drawCard()
+    bot.status =
+      bot.score >= 21 ? (bot.score > 21 ? 'bust' : 'stand') : 'waiting';
+
+    if (wss) this.broadcastGameState(wss);
   }
 
-  private playBots() {
-    Object.values(this.state.players)
-      .filter((p) => p.nick.startsWith('Bot') && p.status === 'waiting')
-      .forEach((bot) => this.playBot(bot.nick));
+  // #region advanceTurn
+  public advanceTurn(wss?: any) {
+    const players = Object.values(this.state.players);
+    const currentIndex = players.findIndex(
+      (p) => p.nick === this.state.currentPlayerNick,
+    );
+
+    for (let i = currentIndex + 1; i < players.length; i++) {
+      if (players[i].status === 'waiting') {
+        this.state.currentPlayerNick = players[i].nick;
+
+        if (players[i].nick.startsWith('Bot')) {
+          this.playBot(players[i].nick, wss);
+          return;
+        }
+
+        if (wss) this.broadcastGameState(wss);
+        return;
+      }
+    }
+
+    this.state.currentPlayerNick = null;
+    this.state.gameStatus = 'dealer_turn';
+    if (wss) this.broadcastGameState(wss);
+    this.playDealer(wss);
+  }
+
+  // #region getDealerPublicState
+  private getDealerPublicState() {
+    const { dealer, gameStatus } = this.state;
+    const isDealerTurn =
+      gameStatus === 'dealer_turn' || gameStatus === 'finished';
+
+    const hand = isDealerTurn
+      ? dealer.hand
+      : [dealer.hand[0] || null, { suit: 'hidden', value: 'hidden' }];
+
+    const score = isDealerTurn
+      ? dealer.score
+      : this.calculateScore([dealer.hand[0]]);
+
+    return { hand, score };
+  }
+
+  // #region clearReady
+  private clearReady() {
+    this.readyPlayers.clear();
+    this.allPlayersReady = false;
   }
 }

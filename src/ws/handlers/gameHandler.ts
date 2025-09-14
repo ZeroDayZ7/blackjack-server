@@ -3,6 +3,7 @@ import { Server } from 'ws';
 import logger from '../../utils/logger.js';
 import { GameService } from '../services/gameService.js';
 import { games, lobbies } from '@ws/data/data.js';
+import { broadcastLobbyList } from '@ws/utils/broadcast.js';
 
 export const handleGameMessage = (
   ws: MyWebSocket,
@@ -56,6 +57,7 @@ export const handleGameMessage = (
       // Utwórz grę
       const playerNicks = [...lobby.players];
       const gameService = new GameService(msg.lobbyId, playerNicks);
+      gameService.checkInitialBlackjack(wss);
       games[msg.lobbyId] = gameService;
       logger.info(
         `[GAME_MESSAGE] Utworzono grę dla lobby ${
@@ -96,7 +98,7 @@ export const handleGameMessage = (
       // Automatyczne tury botów jeśli pierwszy gracz to bot
       const firstPlayer = playerNicks[0];
       if (firstPlayer.startsWith('Bot')) {
-        setTimeout(() => gameService.nextTurn(), 200);
+        setTimeout(() => gameService.advanceTurn(), 200);
       }
 
       break;
@@ -196,7 +198,7 @@ export const handleGameMessage = (
       // Automatyczne tury botów
       let nextPlayer = game.getCurrentPlayer();
       while (nextPlayer?.startsWith('Bot')) {
-        game.nextTurn(); // bot wykonuje ruch
+        game.advanceTurn(wss); // bot wykonuje ruch
         nextPlayer = game.getCurrentPlayer();
       }
 
@@ -307,6 +309,57 @@ export const handleGameMessage = (
       logger.info(
         `[PLAYER_READY] Gotowość gracza ${ws.nick} przetworzona pomyślnie`,
       );
+      break;
+    }
+
+    // #region 'leave_game'
+    case 'leave_game': {
+      if (!msg.lobbyId || !ws.nick) return;
+
+      const lobby = lobbies.find((l) => l.id === msg.lobbyId);
+      const game = games[msg.lobbyId];
+
+      if (!lobby) return;
+
+      // usuń gracza z lobby
+      lobby.players = lobby.players.filter((p) => p !== ws.nick);
+
+      // jeśli gracz był hostem, wybierz nowego
+      if (lobby.host === ws.nick && lobby.players.length > 0) {
+        lobby.host = lobby.players[0];
+      }
+
+      // jeśli lobby puste, usuń grę i lobby
+      if (lobby.players.length === 0) {
+        delete games[msg.lobbyId];
+        const index = lobbies.findIndex((l) => l.id === msg.lobbyId);
+        if (index >= 0) lobbies.splice(index, 1);
+        logger.info(`[LEAVE_GAME] Lobby ${msg.lobbyId} usunięte (brak graczy)`);
+      } else if (game) {
+        // usuń gracza z gameService
+        game.removePlayer(ws.nick);
+
+        // wyślij aktualny publiczny stan do pozostałych graczy
+        const publicState = game.getPublicState();
+        wss.clients.forEach((c: any) => {
+          if (c.readyState === 1 && lobby.players.includes(c.nick)) {
+            c.send(
+              JSON.stringify({
+                type: 'game_state_public',
+                gameState: publicState,
+              }),
+            );
+            const playerState = game.getPlayer(c.nick);
+            if (playerState)
+              c.send(
+                JSON.stringify({ type: 'game_state_private', playerState }),
+              );
+          }
+        });
+      }
+
+      ws.send(JSON.stringify({ type: 'left_game', lobbyId: msg.lobbyId }));
+      broadcastLobbyList(wss);
       break;
     }
 
