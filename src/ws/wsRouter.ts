@@ -14,6 +14,8 @@ export function routeWsMessage(ws: MyWebSocket, wss: WebSocketServer, data: WsMe
     case "start_game":
     case "player_action":
     case "subscribe_to_game":
+    case "restart_game":
+    case "player_ready":
       return handleGameMessage(ws, wss, data);
     default:
       console.warn("❌ Unknown WS message type:", data.type);

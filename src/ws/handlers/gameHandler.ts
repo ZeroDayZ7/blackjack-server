@@ -41,7 +41,20 @@ export const handleGameMessage = (
         return;
       }
 
-      const playerNicks = [...lobby.players]; // graczy pobieramy z lobby
+      // Dodaj boty, jeśli opcja włączona
+      if (lobby.useBots) {
+        const botsNeeded = lobby.maxPlayers - lobby.players.length;
+        for (let i = 0; i < botsNeeded; i++) {
+          const botNick = `Bot${i + 1}`;
+          lobby.players.push(botNick);
+        }
+        logger.info(
+          `[GAME_MESSAGE] Dodano ${botsNeeded} botów do lobby ${msg.lobbyId}`,
+        );
+      }
+
+      // Utwórz grę
+      const playerNicks = [...lobby.players];
       const gameService = new GameService(msg.lobbyId, playerNicks);
       games[msg.lobbyId] = gameService;
       logger.info(
@@ -50,17 +63,16 @@ export const handleGameMessage = (
         } z graczami: ${playerNicks.join(', ')}`,
       );
 
-      // powiadomienie graczy o starcie gry
+      // Powiadom wszystkich klientów w lobby, że gra się rozpoczęła
       wss.clients.forEach((c: any) => {
         if (c.readyState === 1 && c.lobbyId === msg.lobbyId) {
-          logger.debug(`[GAME_MESSAGE] Wysyłam 'game_started' do ${c.nick}`);
           c.send(
             JSON.stringify({ type: 'game_started', lobbyId: msg.lobbyId }),
           );
         }
       });
 
-      // wysyłamy publiczny stan gry do wszystkich graczy
+      // Wyślij publiczny stan gry
       const publicState = gameService.getPublicState();
       logger.info(
         `[GAME_MESSAGE] Public state dla lobby ${msg.lobbyId}: ${JSON.stringify(
@@ -69,11 +81,9 @@ export const handleGameMessage = (
           2,
         )}`,
       );
+
       wss.clients.forEach((c: any) => {
         if (c.readyState === 1 && c.lobbyId === msg.lobbyId) {
-          logger.debug(
-            `[GAME_MESSAGE] Wysyłam 'game_state_public' do ${c.nick}`,
-          );
           c.send(
             JSON.stringify({
               type: 'game_state_public',
@@ -82,6 +92,12 @@ export const handleGameMessage = (
           );
         }
       });
+
+      // Automatyczne tury botów jeśli pierwszy gracz to bot
+      const firstPlayer = playerNicks[0];
+      if (firstPlayer.startsWith('Bot')) {
+        setTimeout(() => gameService.nextTurn(), 200);
+      }
 
       break;
     }
@@ -112,6 +128,42 @@ export const handleGameMessage = (
       break;
     }
 
+    // #region 'restart_game'
+    case 'restart_game': {
+      if (!msg.lobbyId) {
+        logger.error(
+          `[GAME_MESSAGE] Brak lobbyId w wiadomości typu ${msg.type}`,
+        );
+        return;
+      }
+
+      const game = games[msg.lobbyId];
+      if (!game) return;
+
+      // reset gry w serwisie
+      game.resetGame();
+
+      // wysyłka stanu publicznego i prywatnego
+      const publicState = game.getPublicState();
+      wss.clients.forEach((c: any) => {
+        if (c.readyState === 1 && c.lobbyId === msg.lobbyId) {
+          c.send(
+            JSON.stringify({
+              type: 'game_state_public',
+              gameState: publicState,
+            }),
+          );
+
+          // prywatny stan dla każdego gracza
+          const playerState = game.getPlayer(c.nick);
+          if (playerState) {
+            c.send(JSON.stringify({ type: 'game_state_private', playerState }));
+          }
+        }
+      });
+      break;
+    }
+
     // #region 'player_action'
     case 'player_action': {
       if (!msg.lobbyId || !ws.nick) {
@@ -127,6 +179,7 @@ export const handleGameMessage = (
         return;
       }
 
+      // Wykonanie akcji gracza
       switch (msg.action) {
         case 'hit':
           game.hit(ws.nick);
@@ -140,7 +193,14 @@ export const handleGameMessage = (
           logger.warn(`[PLAYER_ACTION] Nieznana akcja: ${msg.action}`);
       }
 
-      // wysyłamy aktualny publiczny stan gry do wszystkich w lobby
+      // Automatyczne tury botów
+      let nextPlayer = game.getCurrentPlayer();
+      while (nextPlayer?.startsWith('Bot')) {
+        game.nextTurn(); // bot wykonuje ruch
+        nextPlayer = game.getCurrentPlayer();
+      }
+
+      // Wysyłamy aktualny publiczny stan gry do wszystkich w lobby
       const publicState = game.getPublicState();
       wss.clients.forEach((c: any) => {
         if (c.readyState === 1 && c.lobbyId === msg.lobbyId) {
@@ -150,15 +210,103 @@ export const handleGameMessage = (
               gameState: publicState,
             }),
           );
+
+          // prywatny stan dla każdego gracza
+          const playerState = game.getPlayer(c.nick);
+          if (playerState) {
+            c.send(JSON.stringify({ type: 'game_state_private', playerState }));
+          }
         }
       });
 
-      // wysyłamy prywatny stan dla klikającego gracza
-      const playerState = game.getPlayer(ws.nick);
-      if (playerState) {
-        ws.send(JSON.stringify({ type: 'game_state_private', playerState }));
+      break;
+    }
+
+    // #region 'player_ready'
+    case 'player_ready': {
+      logger.info(`[PLAYER_READY] Otrzymano gotowość od gracza: ${ws.nick}`);
+
+      if (!msg.lobbyId || !ws.nick) {
+        logger.warn(`[PLAYER_READY] Brak lobbyId lub nick w wiadomości`);
+        return;
       }
 
+      const game = games[msg.lobbyId];
+      if (!game) {
+        logger.warn(
+          `[PLAYER_READY] Nie znaleziono gry dla lobby ${msg.lobbyId}`,
+        );
+        return;
+      }
+
+      // oznacz gracza jako gotowego
+      logger.info(`[PLAYER_READY] Oznaczanie gracza ${ws.nick} jako gotowego`);
+      game.playerReady(ws.nick);
+
+      // pobierz publiczny stan gry
+      const publicState = game.getPublicState();
+      logger.info(
+        `[PLAYER_READY] Wysyłanie stanu gry dla lobby ${msg.lobbyId}`,
+      );
+
+      // wyślij stan gry wszystkim w lobby
+      wss.clients.forEach((c: any) => {
+        if (c.readyState === 1 && c.lobbyId === msg.lobbyId) {
+          // publiczny stan
+          logger.info(
+            `[PLAYER_READY] Wysyłanie publicznego stanu do gracza ${c.nick}`,
+          );
+          c.send(
+            JSON.stringify({
+              type: 'game_state_public',
+              gameState: publicState,
+            }),
+          );
+
+          // prywatny stan
+          const playerState = game.getPlayer(c.nick);
+          if (playerState) {
+            logger.info(
+              `[PLAYER_READY] Wysyłanie prywatnego stanu do gracza ${c.nick}`,
+            );
+            c.send(JSON.stringify({ type: 'game_state_private', playerState }));
+          }
+        }
+      });
+
+      // jeśli wszyscy gracze-człowieki gotowi → start następnej rundy
+      const humanPlayers = Object.keys(game.getState().players).filter(
+        (n) => !n.startsWith('Bot'),
+      );
+
+      if (humanPlayers.every((nick) => game['readyPlayers'].has(nick))) {
+        logger.info(
+          `[PLAYER_READY] Wszyscy gracze gotowi, start kolejnej rundy`,
+        );
+        game.startNextRound();
+
+        // odśwież stan gry po starcie rundy
+        const updatedPublicState = game.getPublicState();
+        wss.clients.forEach((c: any) => {
+          if (c.readyState === 1 && c.lobbyId === msg.lobbyId) {
+            c.send(
+              JSON.stringify({
+                type: 'game_state_public',
+                gameState: updatedPublicState,
+              }),
+            );
+            const playerState = game.getPlayer(c.nick);
+            if (playerState)
+              c.send(
+                JSON.stringify({ type: 'game_state_private', playerState }),
+              );
+          }
+        });
+      }
+
+      logger.info(
+        `[PLAYER_READY] Gotowość gracza ${ws.nick} przetworzona pomyślnie`,
+      );
       break;
     }
 

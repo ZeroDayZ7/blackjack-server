@@ -5,5 +5,5 @@ export interface Lobby {
   maxPlayers: number;
   useBots: boolean;
   started: boolean;
-  host: string;
+  host: string | null;
 }

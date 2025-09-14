@@ -3,6 +3,7 @@ import { Server as HttpServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { routeWsMessage } from './wsRouter.js';
 import type { MyWebSocket, WsMessage } from '@ws/types/index.js';
+import { handleDisconnect } from './utils/lobbyManager.js';
 
 export const setupWebSocket = (server: HttpServer) => {
   const wss = new WebSocketServer({ server, path: '/ws' });
@@ -22,7 +23,7 @@ export const setupWebSocket = (server: HttpServer) => {
       routeWsMessage(ws, wss, data);
     });
 
-    ws.on('close', () => console.log('👋 Client disconnected'));
+    ws.on('close', () => handleDisconnect(ws, wss));
   });
 
   return wss;
