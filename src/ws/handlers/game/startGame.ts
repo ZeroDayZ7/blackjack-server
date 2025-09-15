@@ -6,7 +6,7 @@ import logger from '../../../utils/logger.js';
 import { BroadcasterGame } from '../../services/transport/BroadcasterGame.js';
 
 export const handleStartGame = async (ws: MyWebSocket, wss: Server, msg: WsMessage) => {
-  const { lobbyId: lobbyId } = msg;
+  const { lobbyId } = msg;
   if (!lobbyId || !ws.nick) {
     logger.warn(`[handleStartGame] Brak lobbyId w wiadomości od ${ws.nick}`);
     ws.send(JSON.stringify({ type: 'error', message: 'Missing lobbyId or nick' }));

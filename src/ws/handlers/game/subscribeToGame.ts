@@ -5,7 +5,7 @@ import logger from '../../../utils/logger.js';
 import { dataStore } from '@ws/data/data.js';
 
 export const handleSubscribeToGame = async (ws: MyWebSocket, wss: Server, msg: WsMessage, game?: any) => {
-  const { lobbyName: lobbyId } = msg;
+  const { lobbyId } = msg;
 
   if (!lobbyId) {
     logger.error(`[SUBSCRIBE_TO_GAME] Brak lobbyId w wiadomości`);

@@ -47,7 +47,7 @@ export const handleStartGame = async (ws: MyWebSocket, wss: Server, msg: GameMes
     if (lobby.players.length > 0) gameService.startNextRound(wss);
 
     // Broadcast aktualnej listy lobby
-    await broadcastLobbyList(wss);
+    broadcastLobbyList(wss);
   });
 };
 
@@ -82,6 +82,6 @@ export const handleLeaveGame = async (ws: MyWebSocket, wss: Server, msg: WsMessa
     ws.send(JSON.stringify({ type: 'left_game', lobbyId }));
 
     // Broadcast aktualnej listy lobby
-    await broadcastLobbyList(wss);
+    broadcastLobbyList(wss);
   });
 };

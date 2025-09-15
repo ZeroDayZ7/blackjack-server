@@ -1,6 +1,6 @@
 import { transports, createLogger, format, Logger } from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
-import { env } from 'process';
+import { env } from 'config/env.js';
 
 // Definicja poziomów logowania z typami
 const logLevels: Record<string, number> = {
@@ -24,17 +24,12 @@ const consoleFormat = format.combine(
   format.colorize({ all: true }), // Kolory dla wszystkich poziomów
   format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   format.printf(({ timestamp, level, message, ...meta }) => {
-    return `${timestamp} [${level}]: ${message} ${
-      Object.keys(meta).length ? JSON.stringify(meta, null, 2) : ''
-    }`;
-  })
+    return `${timestamp} [${level}]: ${message} ${Object.keys(meta).length ? JSON.stringify(meta, null, 2) : ''}`;
+  }),
 );
 
 // Format dla plików (bez kolorów, JSON)
-const fileFormat = format.combine(
-  format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  format.json()
-);
+const fileFormat = format.combine(format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), format.json());
 
 // Interfejs dla loggera z metodą debugObject
 interface CustomLogger extends Logger {
@@ -73,10 +68,7 @@ const logger: CustomLogger = createLogger({
 
 // Dodanie metody debugObject (loguje tylko gdy poziom to debug lub niższy)
 logger.debugObject = (message: string, object: any): void => {
-  const levelNum = logLevels[logger.level] ?? 2; // default info=2
-  if (levelNum >= logLevels.debug) {
-    logger.debug(message, { object: JSON.stringify(object, null, 2) });
-  }
+  logger.debug(message, object);
 };
 
 export default logger;

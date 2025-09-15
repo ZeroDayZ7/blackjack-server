@@ -9,9 +9,12 @@ import logger from '@utils/logger.js';
  * Handle creation of a new lobby
  */
 export async function handleCreateLobby(ws: MyWebSocket, wss: Server, msg: LobbyMessage) {
+  logger.debug(`[HANDLE_CREATE_LOBBY] Received request: ${JSON.stringify(msg, null, 2)}`);
+
   // Guard clause – brak nick lub lobbyName
   if (!msg.nick || !msg.lobbyName) {
     ws.send(JSON.stringify({ type: 'error', message: 'Missing nick or lobbyName' }));
+    logger.warn(`[HANDLE_CREATE_LOBBY] Missing nick or lobbyName from client`);
     return;
   }
 
@@ -19,6 +22,7 @@ export async function handleCreateLobby(ws: MyWebSocket, wss: Server, msg: Lobby
   const existingLobby = dataStore.getLobbies().find((l) => l.players.includes(msg.nick));
   if (existingLobby) {
     ws.send(JSON.stringify({ type: 'error', message: 'You are already in a lobby' }));
+    logger.warn(`[HANDLE_CREATE_LOBBY] Player "${msg.nick}" is already in lobby "${existingLobby.id}"`);
     return;
   }
 
@@ -32,18 +36,22 @@ export async function handleCreateLobby(ws: MyWebSocket, wss: Server, msg: Lobby
     started: false,
     host: msg.nick,
   };
+  logger.debug(`[HANDLE_CREATE_LOBBY] New lobby object created ${JSON.stringify(newLobby, null, 2)}`);
 
   // Dodanie do dataStore
   dataStore.addLobby(newLobby);
+  logger.debug(`[HANDLE_CREATE_LOBBY] Lobby "${newLobby.id}" added to dataStore`);
 
   // Przypisanie ws properties
   ws.lobbyId = newLobby.id;
   ws.nick = msg.nick;
+  logger.debug(`[HANDLE_CREATE_LOBBY] WS properties set for player "${msg.nick}"`);
 
   // Potwierdzenie dla gracza
   ws.send(JSON.stringify({ type: 'joined_lobby', nick: msg.nick, lobby: newLobby }));
+  logger.info(`[HANDLE_CREATE_LOBBY] Sent joined_lobby confirmation to "${msg.nick}"`);
 
-  logger.info(`[CREATE_LOBBY] Lobby created: ${JSON.stringify(newLobby, null, 2)}`);
-
-  await broadcastLobbyList(wss);
+  // Broadcast lobby list to all clients
+  broadcastLobbyList(wss);
+  logger.info(`[HANDLE_CREATE_LOBBY] Broadcasted updated lobby list`);
 }

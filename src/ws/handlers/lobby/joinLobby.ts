@@ -6,13 +6,13 @@ import { broadcastLobby, broadcastLobbyList } from '@ws/services/transport/Broad
 import logger from '@logger';
 
 export async function handleJoinLobby(ws: MyWebSocket, wss: Server, msg: LobbyMessage) {
-  if (!msg.nick || !msg.lobbyName) {
+  if (!msg.nick || !msg.lobbyId) {
     ws.send(JSON.stringify({ type: 'error', message: 'Missing nick or lobbyId' }));
     return;
   }
 
   await dataStore.withLock(async () => {
-    const lobby = dataStore.getLobbies().find((l) => l.id === msg.lobbyName);
+    const lobby = dataStore.getLobbies().find((l) => l.id === msg.lobbyId);
     if (!lobby) {
       ws.send(JSON.stringify({ type: 'error', message: 'Lobby not found' }));
       return;
@@ -33,7 +33,7 @@ export async function handleJoinLobby(ws: MyWebSocket, wss: Server, msg: LobbyMe
     ws.lobbyId = lobby.id;
     ws.nick = msg.nick;
 
-    logger.info(`[JOIN_LOBBY] ${msg.nick} joined lobby ${msg.lobbyName}`);
+    logger.info(`[JOIN_LOBBY] ${msg.nick} joined lobby ${msg.lobbyId}`);
 
     // Wysyłamy info do dołączającego
     ws.send(JSON.stringify({ type: 'joined_lobby', nick: msg.nick, lobby }));
@@ -42,6 +42,6 @@ export async function handleJoinLobby(ws: MyWebSocket, wss: Server, msg: LobbyMe
     broadcastLobby(wss, lobby.id);
 
     // Broadcast całej listy lobby
-    await broadcastLobbyList(wss);
+    broadcastLobbyList(wss);
   });
 }

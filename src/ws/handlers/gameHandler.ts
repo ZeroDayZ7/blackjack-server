@@ -1,5 +1,6 @@
 import type { Server } from 'ws';
 import type { MyWebSocket, WsMessage } from '@types';
+import { dataStore } from '@ws/data/data.js';
 import * as Handlers from './game/index.js'; // import wszystkich handlerów
 
 const gameHandlerMap: Record<
@@ -26,7 +27,8 @@ export const routeGameMessage = async (ws: MyWebSocket, wss: Server, msg: WsMess
     return;
   }
 
-  const game = msg.lobbyName ? (await import('@ws/data/data.js')).dataStore.getGames()[msg.lobbyName] : undefined;
+  // const game = msg.lobbyId ? (await import('@ws/data/data.js')).dataStore.getGames()[msg.lobbyId] : undefined;
+  const game = msg.lobbyId ? dataStore.getGames()[msg.lobbyId] : undefined;
 
   try {
     await handler(ws, wss, msg, game);

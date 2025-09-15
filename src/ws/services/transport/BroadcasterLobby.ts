@@ -43,11 +43,27 @@ export function broadcastLobbyUpdate(wss: Server, lobby: Lobby) {
   });
 }
 
-/** Wysyła aktualną listę wszystkich lobby do wszystkich klientów */
-export async function broadcastLobbyList(wss: Server) {
-  await dataStore.withLock(async () => {
+export function sendLobbyListTo(ws: MyWebSocket) {
+  const lobbyList = dataStore.getLobbies().map((l) => ({
+    id: l.id,
+    name: l.name,
+    players: l.players,
+    host: l.host,
+    maxPlayers: l.maxPlayers,
+    useBots: l.useBots,
+  }));
+
+  if (ws.readyState === ws.OPEN) {
+    ws.send(JSON.stringify({ type: 'lobbies_updated', lobbies: lobbyList }));
+  }
+}
+
+
+export function broadcastLobbyList(wss: Server) {
+  dataStore.withLock(() => {
     const lobbyList = dataStore.getLobbies().map((l) => ({
       id: l.id,
+      name: l.name,
       players: l.players,
       host: l.host,
       maxPlayers: l.maxPlayers,
@@ -59,6 +75,8 @@ export async function broadcastLobbyList(wss: Server) {
         client.send(JSON.stringify({ type: 'lobby_list_update', lobbies: lobbyList }));
       }
     });
+
+    logger.info('[BROADCAST] Lobby list sent to all clients');
   });
 }
 

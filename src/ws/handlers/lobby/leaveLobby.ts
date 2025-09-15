@@ -12,7 +12,8 @@ export async function handleLeaveLobby(ws: MyWebSocket, wss: Server, msg: LobbyM
 
   const lobby = dataStore.getLobbies().find((l) => l.id === msg.lobbyId);
   if (!lobby) {
-    ws.send(JSON.stringify({ type: 'error', message: 'Lobby not found' }));
+    logger.info(`[LEAVE_LOBBY] Lobby ${msg.lobbyId} not found, still confirming leave for ${msg.nick}`);
+    ws.send(JSON.stringify({ type: 'left_lobby', lobbyId: msg.lobbyId, nick: msg.nick }));
     return;
   }
 
@@ -38,5 +39,5 @@ export async function handleLeaveLobby(ws: MyWebSocket, wss: Server, msg: LobbyM
   ws.send(JSON.stringify({ type: 'left_lobby', lobbyId: lobby.id, nick: msg.nick }));
 
   // Zaktualizuj listę wszystkich lobby
-  await broadcastLobbyList(wss);
+  broadcastLobbyList(wss);
 }
