@@ -16,6 +16,9 @@ export interface Card {
     | 'A';
 }
 
+export type HiddenCard = { suit: 'hidden'; value: 'hidden' };
+export type AnyCard = Card | HiddenCard;
+
 export type PlayerStatus =
   | 'waiting'
   | 'player_turn'
@@ -41,8 +44,10 @@ export interface PlayerState extends BasePlayer {
   result?: PlayerResult;
 }
 
-export interface DealerState extends BasePlayer {
-  status?: PlayerStatus; // jeśli potrzebujesz
+export interface DealerState {
+  hand: AnyCard[];
+  score: number;
+  status?: PlayerStatus;
 }
 
 export type GameStatus =

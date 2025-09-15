@@ -1,30 +1,43 @@
-// setupWebSocket.ts
 import { Server as HttpServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { routeWsMessage } from './wsRouter.js';
 import type { MyWebSocket, WsMessage } from '@ws/types/index.js';
-import { handleDisconnect } from './utils/lobbyManager.js';
+import { handleDisconnect } from './services/transport/BroadcasterLobby.js';
+import logger from '@logger';
 
 export const setupWebSocket = (server: HttpServer) => {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', (ws: MyWebSocket) => {
-    console.log('✅ New WS connection');
+    logger.info('✅ New WS connection');
 
     ws.on('message', (raw: string) => {
       let data: WsMessage;
       try {
         data = JSON.parse(raw.toString());
-      } catch {
-        console.warn('❌ Invalid WS message:', raw);
+      } catch (err) {
+        logger.warn('❌ Invalid WS message received', { raw, error: err });
         return;
       }
 
-      routeWsMessage(ws, wss, data);
+      try {
+        routeWsMessage(ws, wss, data);
+      } catch (err) {
+        logger.error('❌ Error handling WS message', { data, error: err });
+      }
     });
 
-    ws.on('close', () => handleDisconnect(ws, wss));
+    ws.on('close', () => {
+      logger.info(`❌ WS disconnected: ${ws.nick || 'unknown nick'}`);
+      handleDisconnect(ws, wss);
+    });
+
+    ws.on('error', (err) => {
+      logger.error('❌ WS error', { error: err, nick: ws.nick });
+    });
   });
+
+  logger.info('🌐 WebSocket server initialized at /ws');
 
   return wss;
 };
