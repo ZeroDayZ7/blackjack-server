@@ -3,10 +3,9 @@ import { Server } from 'ws';
 import { MyWebSocket, WsMessage } from '@types';
 import logger from '../../../utils/logger.js';
 import { dataStore } from '@ws/data/data.js';
-import { Broadcaster } from '../../services/transport/Broadcaster.js';
 
 export const handlePlayerReady = async (ws: MyWebSocket, wss: Server, msg: WsMessage) => {
-  const { lobbyId, nick } = msg;
+  const { lobbyName: lobbyId, nick } = msg;
 
   if (!lobbyId || !ws.nick || !nick) {
     ws.send(JSON.stringify({ type: 'error', message: 'Missing lobbyId or nick' }));
@@ -22,9 +21,8 @@ export const handlePlayerReady = async (ws: MyWebSocket, wss: Server, msg: WsMes
     }
 
     logger.info(`[PLAYER_READY] Oznaczanie gracza ${ws.nick} jako gotowego`);
-    if (ws.nick) {
-      game.playerReady(ws.nick);
-    }
+    const playerNick: string = ws.nick!;
+    game.playerReady(playerNick);
 
     // Wyślij aktualny publiczny stan gry wszystkim w lobby
     const publicState = game.getPublicState();
@@ -44,9 +42,5 @@ export const handlePlayerReady = async (ws: MyWebSocket, wss: Server, msg: WsMes
       logger.info(`[PLAYER_READY] Wszyscy gracze gotowi, start kolejnej rundy`);
       game.startNextRound(wss); // Broadcast po starcie rundy jest już w startNextRound
     }
-
-    // Opcjonalnie: Broadcast listy lobby (np. do UI)
-    const broadcaster = new Broadcaster(game.getState(), game['playerManager'], game['dealerManager']);
-    broadcaster.broadcastLobbyList(wss);
   });
 };

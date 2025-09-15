@@ -14,11 +14,11 @@ interface BaseMessage<T = any> {
   type: string;
   payload?: T;
   nick?: string;
+  lobbyId: string;
 }
 
 export interface GameMessage<T = any> extends BaseMessage<T> {
   type: GameMessageType;
-  lobbyId: string;
   gameState?: any;
   playerState?: any;
   action?: any;
@@ -27,24 +27,12 @@ export interface GameMessage<T = any> extends BaseMessage<T> {
 
 export interface LobbyMessage<T = any> extends BaseMessage<T> {
   type: LobbyMessageType;
+  lobbyName: string;
   nick: string;
   useBots: boolean;
   maxPlayers?: number;
-  lobbyId: string; // wymagane dla lobby
 }
 export type WsMessage = LobbyMessage | GameMessage;
-// export type WsMessageType = LobbyMessageType | GameMessageType;
-
-// export interface WsMessage<T = any> {
-//   type: WsMessageType | string;
-//   payload?: T;
-//   lobbyId?: string;
-//   nick?: string;
-//   gameState?: any;
-//   playerState?: any;
-//   action?: any;
-//   message?: string;
-// }
 
 export interface MyWebSocket extends WebSocket {
   nick?: string;

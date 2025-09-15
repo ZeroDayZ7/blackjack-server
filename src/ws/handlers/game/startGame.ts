@@ -3,10 +3,10 @@ import { MyWebSocket, WsMessage } from '@types';
 import { GameService } from '../../services/gameService.js';
 import { dataStore } from '@ws/data/data.js';
 import logger from '../../../utils/logger.js';
-import { Broadcaster } from '../../services/transport/Broadcaster.js';
+import { BroadcasterGame } from '../../services/transport/BroadcasterGame.js';
 
 export const handleStartGame = async (ws: MyWebSocket, wss: Server, msg: WsMessage) => {
-  const { lobbyId } = msg;
+  const { lobbyId: lobbyId } = msg;
   if (!lobbyId || !ws.nick) {
     logger.warn(`[handleStartGame] Brak lobbyId w wiadomości od ${ws.nick}`);
     ws.send(JSON.stringify({ type: 'error', message: 'Missing lobbyId or nick' }));
@@ -64,11 +64,11 @@ export const handleStartGame = async (ws: MyWebSocket, wss: Server, msg: WsMessa
     }
 
     // Broadcast listy lobby
-    const broadcaster = new Broadcaster(
+    const broadcaster = new BroadcasterGame(
       gameService.getState(),
       gameService['playerManager'],
       gameService['dealerManager'],
     );
-    broadcaster.broadcastLobbyList(wss);
+    broadcaster.broadcast(wss);
   });
 };

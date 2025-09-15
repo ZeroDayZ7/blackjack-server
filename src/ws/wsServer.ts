@@ -12,12 +12,18 @@ export const setupWebSocket = (server: HttpServer) => {
     logger.info('✅ New WS connection');
 
     ws.on('message', (raw: string) => {
+      logger.info('📨 Raw WS message received', { raw: raw.toString() });
       let data: WsMessage;
       try {
         data = JSON.parse(raw.toString());
       } catch (err) {
         logger.warn('❌ Invalid WS message received', { raw, error: err });
         return;
+      }
+
+      if (!ws.nick && data.nick) {
+        ws.nick = data.nick;
+        logger.info(`🟢 WS nick set to ${ws.nick}`);
       }
 
       try {

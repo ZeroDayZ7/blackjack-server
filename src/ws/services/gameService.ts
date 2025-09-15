@@ -1,6 +1,6 @@
 import logger from '@logger';
 import { DealerManager, GameStateManager, PlayerManager, RoundManager } from './state/index.js';
-import { Broadcaster } from './transport/Broadcaster.js';
+import { BroadcasterGame } from './transport/BroadcasterGame.js';
 import type { PlayerState } from '@types';
 
 export class GameService {
@@ -8,7 +8,7 @@ export class GameService {
   private roundManager: RoundManager;
   private playerManager: PlayerManager;
   private dealerManager: DealerManager;
-  private broadcaster: Broadcaster;
+  private broadcaster: BroadcasterGame;
 
   constructor(lobbyId: string, playerNicks: string[]) {
     logger.info(`[GameService] Initializing game for lobby ${lobbyId} with players: ${playerNicks.join(', ')}`);
@@ -26,7 +26,7 @@ export class GameService {
     this.dealerManager = this.state.dealerManager;
     logger.info(`[GameService] DealerManager initialized`);
 
-    this.broadcaster = new Broadcaster(this.state.getState(), this.playerManager, this.dealerManager);
+    this.broadcaster = new BroadcasterGame(this.state.getState(), this.playerManager, this.dealerManager);
     logger.info(`[GameService] Broadcaster initialized`);
   }
 

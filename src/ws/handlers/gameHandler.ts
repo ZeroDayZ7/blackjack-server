@@ -1,57 +1,37 @@
-import { MyWebSocket, WsMessage } from '@types';
-import { Server } from 'ws';
-import logger from '../../utils/logger.js';
-import {
-  handleSubscribeToGame,
-  handleLeaveGame,
-  handlePlayerReady,
-  handleRestartGame,
-  handleStartGame,
-  handlePlayerAction,
-} from './game/index.js';
-import { dataStore } from '@ws/data/data.js';
+import type { Server } from 'ws';
+import type { MyWebSocket, WsMessage } from '@types';
+import * as Handlers from './game/index.js'; // import wszystkich handlerów
 
-export const handleGameMessage = async (
-  ws: MyWebSocket,
-  wss: Server,
-  msg: WsMessage,
-) => {
-  if (!msg.lobbyId || !ws.nick) {
-    ws.send(JSON.stringify({ type: 'error', message: 'Missing lobbyId or nick' }));
+const gameHandlerMap: Record<
+  string,
+  (ws: MyWebSocket, wss: Server, msg: WsMessage, game?: any) => void | Promise<void>
+> = {
+  start_game: Handlers.handleStartGame,
+  subscribe_to_game: Handlers.handleSubscribeToGame,
+  player_ready: Handlers.handlePlayerReady,
+  restart_game: Handlers.handleRestartGame,
+  player_action: Handlers.handlePlayerAction,
+  leave_game: Handlers.handleLeaveGame,
+};
+
+export const routeGameMessage = async (ws: MyWebSocket, wss: Server, msg: WsMessage) => {
+  if (!msg.type) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Missing message type' }));
     return;
   }
 
-  const game = dataStore.getGames()[msg.lobbyId];
-  if (!game && msg.type !== 'start_game' && msg.type !== 'subscribe_to_game') {
-    ws.send(JSON.stringify({ type: 'error', message: 'Game not found' }));
+  const handler = gameHandlerMap[msg.type];
+  if (!handler) {
+    ws.send(JSON.stringify({ type: 'error', message: `Unknown message type: ${msg.type}` }));
     return;
   }
 
-  logger.info(`[GAME_MESSAGE] Type: ${msg.type}, from: ${ws.nick}, lobbyId: ${msg.lobbyId}`);
+  const game = msg.lobbyName ? (await import('@ws/data/data.js')).dataStore.getGames()[msg.lobbyName] : undefined;
 
-  await dataStore.withLock(async () => {
-    switch (msg.type) {
-      case 'start_game':
-        handleStartGame(ws, wss, msg);
-        break;
-      case 'subscribe_to_game':
-        handleSubscribeToGame(ws, msg);
-        break;
-      case 'player_ready':
-        handlePlayerReady(ws, wss, msg);
-        break;
-      case 'restart_game':
-        handleRestartGame(ws, wss, msg);
-        break;
-      case 'player_action':
-        handlePlayerAction(ws, wss, msg, game);
-        break;
-      case 'leave_game':
-        handleLeaveGame(ws, wss, msg);
-        break;
-      default:
-        logger.warn(`[GAME_MESSAGE] Unhandled message type: ${msg.type} from ${ws.nick}`);
-        ws.send(JSON.stringify({ type: 'error', message: `Unknown message type: ${msg.type}` }));
-    }
-  });
+  try {
+    await handler(ws, wss, msg, game);
+  } catch (err) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
+    console.error(`[GAME_HANDLER_ERROR] ${msg.type} from ${ws.nick}`, err);
+  }
 };
