@@ -26,17 +26,15 @@ export class BroadcasterGame {
    * @param wss WebSocket Server
    * @param specificNick wysyłka tylko do konkretnego gracza (opcjonalnie)
    */
-  broadcast(wss: Server, specificNick?: string) {
+  public broadcast(wss: Server, specificNick?: string) {
     const publicState = this.getPublicState();
+    const activeClients = Array.from(wss.clients).filter(
+      (client: MyWebSocket) => client.readyState === WebSocket.OPEN && client.lobbyId === this.state.lobbyId,
+    );
 
-    wss.clients.forEach((client: MyWebSocket) => {
-      if (client.readyState !== WebSocket.OPEN || client.lobbyId !== this.state.lobbyId) return;
-
+    activeClients.forEach((client: MyWebSocket) => {
       if (!specificNick || client.nick === specificNick) {
-        // publiczny stan gry
         client.send(JSON.stringify({ type: 'game_state_public', gameState: publicState }));
-
-        // prywatny stan gracza
         const playerState = this.playerManager.getPlayer(client.nick!);
         if (playerState) {
           client.send(JSON.stringify({ type: 'game_state_private', playerState }));
@@ -44,7 +42,6 @@ export class BroadcasterGame {
       }
     });
   }
-
   /** Przygotowuje publiczny stan gry (ukrywa karty dealera jeśli nie tura dealera) */
   private getPublicState() {
     const { players, lobbyId, currentPlayerNick, gameStatus, winner, dealer } = this.state;

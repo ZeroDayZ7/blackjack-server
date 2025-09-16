@@ -33,7 +33,7 @@ export class GameService {
   // Pobranie pełnego stanu gry
   public getState() {
     const state = this.state.getState();
-    logger.info(`[GameService] getState called. Current state: ${JSON.stringify(state)}`);
+    logger.debug(`[GameService] getState called. Current state: ${JSON.stringify(state)}`);
     return state;
   }
 
@@ -48,7 +48,7 @@ export class GameService {
   // Publiczny stan gry do WS
   public getPublicState() {
     const publicState = this.state.getPublicState();
-    logger.info(`[GameService] getPublicState called: ${JSON.stringify(publicState, null, 2)}`);
+    logger.debug(`[GameService] getPublicState called: ${JSON.stringify(publicState, null, 2)}`);
     return publicState;
   }
 

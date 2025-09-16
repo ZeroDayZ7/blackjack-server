@@ -5,7 +5,7 @@ import logger from '../../../utils/logger.js';
 import { dataStore } from '@ws/data/data.js';
 
 export const handlePlayerReady = async (ws: MyWebSocket, wss: Server, msg: WsMessage) => {
-  const { lobbyName: lobbyId, nick } = msg;
+  const { lobbyId, nick } = msg;
 
   if (!lobbyId || !ws.nick || !nick) {
     ws.send(JSON.stringify({ type: 'error', message: 'Missing lobbyId or nick' }));

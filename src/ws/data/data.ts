@@ -1,25 +1,18 @@
-// src/data/lobbies.ts
-// import type { Lobby } from "../types/index.js";
-// import { GameService } from "../services/gameService.js";
-
-// export const lobbies: Lobby[] = [];
-// export const games: Record<string, GameService> = {};
-
-import type { Lobby } from "../types/index.js";
-import { GameService } from "../services/gameService.js";
+import type { Lobby } from '../types/index.js';
+import { GameService } from '../services/gameService.js';
+import { Mutex } from 'async-mutex';
 
 export class DataStore {
   private lobbies: Lobby[] = [];
   private games: Record<string, GameService> = {};
-  private lock = false;
+  private mutex = new Mutex();
 
   async withLock<T>(operation: () => Promise<T> | T): Promise<T> {
-    while (this.lock) await new Promise((resolve) => setTimeout(resolve, 10));
-    this.lock = true;
+    const release = await this.mutex.acquire();
     try {
       return await operation();
     } finally {
-      this.lock = false;
+      release();
     }
   }
 

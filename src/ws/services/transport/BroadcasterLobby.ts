@@ -58,7 +58,6 @@ export function sendLobbyListTo(ws: MyWebSocket) {
   }
 }
 
-
 export function broadcastLobbyList(wss: Server) {
   dataStore.withLock(() => {
     const lobbyList = dataStore.getLobbies().map((l) => ({
@@ -71,7 +70,7 @@ export function broadcastLobbyList(wss: Server) {
     }));
 
     wss.clients.forEach((client: MyWebSocket) => {
-      if (client.readyState === 1) {
+      if (client.readyState === 1 && !client.inGame) {
         client.send(JSON.stringify({ type: 'lobby_list_update', lobbies: lobbyList }));
       }
     });

@@ -4,7 +4,7 @@ import { Server } from 'ws';
 import logger from '../../../utils/logger.js';
 import { dataStore } from '@ws/data/data.js';
 
-export const handleSubscribeToGame = async (ws: MyWebSocket, wss: Server, msg: WsMessage, game?: any) => {
+export const handleSubscribeToGame = async (ws: MyWebSocket, wss: Server, msg: WsMessage) => {
   const { lobbyId } = msg;
 
   if (!lobbyId) {

@@ -4,6 +4,7 @@ import { calculateScore } from '../logic/score.js';
 import logger from '@logger';
 import { DealerManager } from './DealerManager.js';
 import { Server } from 'ws';
+import { botDecision, updateBotStatus } from '../logic/bot.js';
 
 export class RoundManager {
   private state: GameState;
@@ -67,13 +68,21 @@ export class RoundManager {
     const player = this.state.players[nick];
     if (!player) return;
 
-    const decision = botDecision(player);
+    const dealerUpCard = this.dealerManager.getHand(false)[0]; // Pobierz odkrytą kartę dealera
+    const decision = botDecision(player, dealerUpCard);
     logger.info(`[BOT] Bot ${nick} decided to ${decision}`);
 
-    if (decision === 'hit') {
+    if (decision === 'hit' || decision === 'double') {
       const card = this.state.deck.pop();
       if (card) {
-        this.state.players[nick].hand.push(card);
+        if (decision === 'hit') {
+          this.state.players[nick].hand.push(card);
+        } else {
+          this.state.players[nick].balance -= player.bet;
+          this.state.players[nick].bet *= 2;
+          this.state.players[nick].hand.push(card);
+          this.state.players[nick].status = 'stand';
+        }
         this.state.players[nick].score = calculateScore(player.hand);
         updateBotStatus(player);
       }
@@ -81,7 +90,7 @@ export class RoundManager {
       this.state.players[nick].status = 'stand';
     }
 
-    if (wss) this.broadcastGameState(wss);
+    if (wss) this.broadcaster(wss);
   }
 
   private playDealer(wss?: any) {

@@ -1,6 +1,6 @@
 // wsRouter.ts
 import type { WebSocketServer } from 'ws';
-import type { MyWebSocket, WsMessage } from './types/index.js';
+import type { GameMessage, LobbyMessage, MyWebSocket, WsMessage } from './types/index.js';
 import { routeLobbyMessage } from './handlers/lobbyHandler.js';
 import { routeGameMessage } from './handlers/gameHandler.js';
 
@@ -10,14 +10,16 @@ export function routeWsMessage(ws: MyWebSocket, wss: WebSocketServer, data: WsMe
     case 'join_lobby':
     case 'leave_lobby':
     case 'ping_lobbies':
-      return routeLobbyMessage(ws, wss, data);
+      return routeLobbyMessage(ws, wss, data as LobbyMessage);
     case 'start_game':
     case 'player_action':
     case 'subscribe_to_game':
     case 'restart_game':
     case 'player_ready':
-      return routeGameMessage(ws, wss, data);
+    case 'leave_game':
+      return routeGameMessage(ws, wss, data as GameMessage);
     default:
       console.warn('❌ Unknown WS message type:', data.type);
   }
 }
+ 

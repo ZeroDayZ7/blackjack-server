@@ -52,6 +52,7 @@ export const handleStartGame = async (ws: MyWebSocket, wss: Server, msg: WsMessa
     // Powiadom WS
     wss.clients.forEach((client: MyWebSocket) => {
       if (client.readyState === WebSocket.OPEN && client.lobbyId === msg.lobbyId) {
+        client.inGame = true; // 🔹 oznaczamy gracza jako "w grze"
         client.send(JSON.stringify({ type: 'game_started', lobbyId: msg.lobbyId }));
         logger.info(`[handleStartGame] Sent 'game_started' WS message to ${client.nick}`);
       }

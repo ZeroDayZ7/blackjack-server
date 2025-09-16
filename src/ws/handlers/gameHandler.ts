@@ -1,11 +1,11 @@
 import type { Server } from 'ws';
-import type { MyWebSocket, WsMessage } from '@types';
+import type { GameMessage, MyWebSocket } from '@types';
 import { dataStore } from '@ws/data/data.js';
 import * as Handlers from './game/index.js'; // import wszystkich handlerów
 
 const gameHandlerMap: Record<
   string,
-  (ws: MyWebSocket, wss: Server, msg: WsMessage, game?: any) => void | Promise<void>
+  (ws: MyWebSocket, wss: Server, msg: GameMessage, game?: any) => void | Promise<void>
 > = {
   start_game: Handlers.handleStartGame,
   subscribe_to_game: Handlers.handleSubscribeToGame,
@@ -15,7 +15,7 @@ const gameHandlerMap: Record<
   leave_game: Handlers.handleLeaveGame,
 };
 
-export const routeGameMessage = async (ws: MyWebSocket, wss: Server, msg: WsMessage) => {
+export const routeGameMessage = async (ws: MyWebSocket, wss: Server, msg: GameMessage) => {
   if (!msg.type) {
     ws.send(JSON.stringify({ type: 'error', message: 'Missing message type' }));
     return;

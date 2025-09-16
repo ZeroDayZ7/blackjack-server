@@ -1,8 +1,9 @@
 import type { WebSocket } from 'ws';
 
-export type LobbyMessageType = 'create_lobby' | 'join_lobby' | 'leave_lobby' | 'ping_lobbies';
+type LobbyMessageType = 'create_lobby' | 'join_lobby' | 'leave_lobby' | 'ping_lobbies';
+type Actions = 'hit' | 'double' | 'stand';
 
-export type GameMessageType =
+type GameMessageType =
   | 'start_game'
   | 'player_action'
   | 'subscribe_to_game'
@@ -11,7 +12,6 @@ export type GameMessageType =
   | 'leave_game';
 
 interface BaseMessage<T = any> {
-  type: string;
   payload?: T;
   nick?: string;
   lobbyId: string;
@@ -21,7 +21,7 @@ export interface GameMessage<T = any> extends BaseMessage<T> {
   type: GameMessageType;
   gameState?: any;
   playerState?: any;
-  action?: any;
+  action?: Actions;
   message?: string;
 }
 
@@ -37,4 +37,5 @@ export type WsMessage = LobbyMessage | GameMessage;
 export interface MyWebSocket extends WebSocket {
   nick?: string;
   lobbyId?: string;
+  inGame?: boolean;
 }

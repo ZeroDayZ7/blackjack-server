@@ -5,7 +5,7 @@ import { dataStore } from '@ws/data/data.js';
 import { BroadcasterGame } from '@ws/services/transport/BroadcasterGame.js';
 
 export const handleRestartGame = async (ws: MyWebSocket, wss: Server, msg: WsMessage) => {
-  const { lobbyName: lobbyId } = msg;
+  const { lobbyId } = msg;
   if (!lobbyId || !ws.nick) {
     ws.send(JSON.stringify({ type: 'error', message: 'Missing lobbyId or nick' }));
     return;
@@ -18,13 +18,13 @@ export const handleRestartGame = async (ws: MyWebSocket, wss: Server, msg: WsMes
       return;
     }
 
-    const lobby = dataStore.getLobbies().find((l) => l.id === msg.lobbyName);
+    const lobby = dataStore.getLobbies().find((l) => l.id === lobbyId);
     if (!lobby || lobby.host !== ws.nick) {
       ws.send(JSON.stringify({ type: 'error', message: 'Only host can restart the game' }));
       return;
     }
 
-    logger.info(`[RESTART_GAME] Restart gry w lobby ${msg.lobbyName}`);
+    logger.info(`[RESTART_GAME] Restart gry w lobby ${lobbyId}`);
 
     // Reset gry
     game.resetGame(wss);
