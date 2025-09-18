@@ -27,13 +27,19 @@ export class DealerManager {
   }
 
   getHand(hidden = true): AnyCard[] {
-    if (hidden && this.hand.length > 0) {
+    if (hidden && this.hand.length >= 2) {
+      // Ukryj hole (drugą kartę), pokaż up (pierwszą)
       return [this.hand[0], { suit: 'hidden', value: 'hidden' }];
     }
-    return this.hand;
+    return this.hand; // Pełna ręka podczas dealer_turn
   }
 
+  /** Zwraca score publiczny/prywatny */
   getScore(hidden = true): number {
-    return hidden ? 0 : this.score;
+    if (hidden && this.hand.length >= 2) {
+      // Liczenie tylko up card (pierwszej)
+      return calculateScore([this.hand[0]]);
+    }
+    return this.score; // Full score
   }
 }

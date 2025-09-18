@@ -1,12 +1,39 @@
-// utils/validation.ts
-import { MyWebSocket, WsMessage } from '@types';
 import logger from '@logger';
+import { z } from 'zod';
+import { ActionInput, ActionSchema } from '../utils/validator.js';
+import { GameMessage, LobbyMessage, MyWebSocket } from '@types';
 
-export function validateMessage(ws: MyWebSocket, msg: WsMessage): boolean {
-  if (!msg.lobbyId || !ws.nick) {
-    logger.warn(`[VALIDATION] Missing lobbyId or nick`, { lobbyId: msg.lobbyId, nick: ws.nick });
-    ws.send(JSON.stringify({ type: 'error', message: 'Missing lobbyId or nick' }));
-    return false;
+export function validateAction(ws: MyWebSocket, msg: GameMessage | LobbyMessage): ActionInput | null {
+  const parsed = ActionSchema.safeParse({
+    lobbyId: msg?.lobbyId,
+    lobbyName: msg?.lobbyName,
+    nick: ws.nick,
+  });
+
+  if (!parsed.success) {
+    logger.warn('[LobbyValidation] Missing or invalid data', {
+      errors: z.treeifyError(parsed.error),
+    });
+    ws.send(
+      JSON.stringify({
+        type: 'error',
+        message: 'Invalid lobby action data',
+        details: parsed.error.issues,
+      }),
+    );
+    return null;
   }
-  return true;
+
+  // Dodatkowa walidacja - albo lobbyId albo lobbyName
+  if (!parsed.data.lobbyId && !parsed.data.lobbyName) {
+    ws.send(
+      JSON.stringify({
+        type: 'error',
+        message: 'Either lobbyId or lobbyName is required',
+      }),
+    );
+    return null;
+  }
+
+  return parsed.data;
 }

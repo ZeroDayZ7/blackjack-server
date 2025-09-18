@@ -4,6 +4,7 @@ import { dataStore } from '@ws/data/data.js';
 import { broadcastLobbyList } from '@ws/services/transport/BroadcasterLobby.js';
 import crypto from 'crypto';
 import logger from '@utils/logger.js';
+import { validateAction } from '@utils/wsValidators.js';
 
 /**
  * Handle creation of a new lobby
@@ -12,11 +13,12 @@ export async function handleCreateLobby(ws: MyWebSocket, wss: Server, msg: Lobby
   logger.debug(`[HANDLE_CREATE_LOBBY] Received request: ${JSON.stringify(msg, null, 2)}`);
 
   // Guard clause – brak nick lub lobbyName
-  if (!msg.nick || !msg.lobbyName) {
-    ws.send(JSON.stringify({ type: 'error', message: 'Missing nick or lobbyName' }));
-    logger.warn(`[HANDLE_CREATE_LOBBY] Missing nick or lobbyName from client`);
-    return;
+  const data = validateAction(ws, msg);
+  if (!data || !data.lobbyName) {
+    return; // Błąd już obsłużony w validateAction
   }
+  logger.info(data.nick);
+  logger.info(data.lobbyName);
 
   // Sprawdzenie czy gracz już jest w lobby
   const existingLobby = dataStore.getLobbies().find((l) => l.players.includes(msg.nick));

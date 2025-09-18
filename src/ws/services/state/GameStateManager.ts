@@ -112,10 +112,11 @@ export class GameStateManager {
   /** Widok publiczny dealera */
   private getDealerPublicState() {
     const { gameStatus } = this.state;
+    const isHidden = gameStatus === 'player_turn'; // Ukryj podczas tury graczy
 
-    const hand = this.dealerManager.getHand(gameStatus === 'player_turn');
-    const score = this.dealerManager.getScore(gameStatus !== 'player_turn');
-
-    return { hand, score };
+    return {
+      hand: this.dealerManager.getHand(isHidden),
+      score: this.dealerManager.getScore(isHidden),
+    };
   }
 }

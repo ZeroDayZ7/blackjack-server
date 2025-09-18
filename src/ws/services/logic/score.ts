@@ -8,7 +8,7 @@ export function calculateScore(hand: Card[]): number {
   let aces = 0;
 
   for (const card of hand) {
-    if (!card || !card.value) continue;
+    if (!card || !card.value || card.value === 'hidden') continue; // <-- ignorujemy ukryte karty
 
     if (['J', 'Q', 'K'].includes(card.value)) {
       total += 10;

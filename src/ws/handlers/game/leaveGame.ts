@@ -34,16 +34,19 @@ export const handleLeaveGame = async (ws: MyWebSocket, wss: Server, msg: WsMessa
       logger.info('[handleLeaveGame] transferred host', { newHost: lobby.host });
     }
 
-    // Jeśli lobby puste, usuń grę i lobby
-    if (lobby.players.length === 0) {
+    if (game) {
+      game.removePlayer(ws.nick!, wss);
+      logger.info('[handleLeaveGame] removed player from game', { nick: ws.nick });
+    }
+
+    // Sprawdź, czy w lobby pozostał choć jeden prawdziwy gracz
+    const humanPlayers = lobby.players.filter((p) => !p.startsWith('Bot'));
+
+    if (humanPlayers.length === 0) {
+      // Usuń grę i lobby, jeśli nie ma żadnego człowieka
       dataStore.removeGame(lobbyId);
       dataStore.removeLobby(lobbyId);
       logger.info('[handleLeaveGame] removed empty lobby and game', { lobbyId });
-    } else if (game) {
-      if (ws.nick) {
-        game.removePlayer(ws.nick, wss);
-        logger.info('[handleLeaveGame] removed player from game', { nick: ws.nick, lobbyId });
-      }
     }
 
     ws.send(JSON.stringify({ type: 'left_game', lobbyId }));

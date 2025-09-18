@@ -15,6 +15,7 @@ interface BaseMessage<T = any> {
   payload?: T;
   nick?: string;
   lobbyId: string;
+  lobbyName: string;
 }
 
 export interface GameMessage<T = any> extends BaseMessage<T> {
@@ -27,7 +28,6 @@ export interface GameMessage<T = any> extends BaseMessage<T> {
 
 export interface LobbyMessage<T = any> extends BaseMessage<T> {
   type: LobbyMessageType;
-  lobbyName: string;
   nick: string;
   useBots: boolean;
   maxPlayers?: number;

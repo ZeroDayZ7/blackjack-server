@@ -1,28 +1,27 @@
 import { Server, WebSocket } from 'ws';
-import { MyWebSocket, WsMessage } from '@types';
+import { GameMessage, MyWebSocket, WsMessage } from '@types';
 import { GameService } from '../../services/gameService.js';
 import { dataStore } from '@ws/data/data.js';
 import logger from '../../../utils/logger.js';
 import { BroadcasterGame } from '../../services/transport/BroadcasterGame.js';
+import { validateAction } from '@utils/wsValidators.js';
 
-export const handleStartGame = async (ws: MyWebSocket, wss: Server, msg: WsMessage) => {
-  const { lobbyId } = msg;
-  if (!lobbyId || !ws.nick) {
-    logger.warn(`[handleStartGame] Brak lobbyId w wiadomości od ${ws.nick}`);
-    ws.send(JSON.stringify({ type: 'error', message: 'Missing lobbyId or nick' }));
-    return;
-  }
+export const handleStartGame = async (ws: MyWebSocket, wss: Server, msg: GameMessage) => {
+  const validated = validateAction(ws, msg);
+  if (!validated) return;
+
+  const { lobbyId, nick } = validated;
 
   await dataStore.withLock(async () => {
-    const lobby = dataStore.getLobbies().find((l) => l.id === msg.lobbyId);
+    const lobby = dataStore.getLobbies().find((l) => l.id === lobbyId);
     if (!lobby) {
-      logger.warn(`[handleStartGame] Lobby nie znalezione: ${msg.lobbyId}`);
+      logger.warn(`[handleStartGame] Lobby nie znalezione: ${lobbyId}`);
       ws.send(JSON.stringify({ type: 'error', message: 'Lobby not found' }));
       return;
     }
 
-    if (lobby.host !== ws.nick) {
-      logger.warn(`[handleStartGame] Gracz ${ws.nick} nie jest hostem lobby ${msg.lobbyId}`);
+    if (lobby.host !== nick) {
+      logger.warn(`[handleStartGame] Gracz ${nick} nie jest hostem lobby ${lobbyId}`);
       ws.send(JSON.stringify({ type: 'error', message: 'Only host can start the game' }));
       return;
     }
@@ -44,23 +43,23 @@ export const handleStartGame = async (ws: MyWebSocket, wss: Server, msg: WsMessa
     logger.info(`[handleStartGame] Final player list: ${lobby.players.join(', ')}`);
 
     const gameService = new GameService(lobbyId, [...lobby.players]);
-    logger.info(`[handleStartGame] GameService initialized for lobby ${msg.lobbyId}`);
+    logger.info(`[handleStartGame] GameService initialized for lobby ${lobbyId}`);
 
     dataStore.addGame(lobbyId, gameService);
     logger.info(`[handleStartGame] GameService stored in games map: ${Object.keys(dataStore.getGames()).join(', ')}`);
 
     // Powiadom WS
     wss.clients.forEach((client: MyWebSocket) => {
-      if (client.readyState === WebSocket.OPEN && client.lobbyId === msg.lobbyId) {
+      if (client.readyState === WebSocket.OPEN && client.lobbyId === lobbyId) {
         client.inGame = true; // 🔹 oznaczamy gracza jako "w grze"
-        client.send(JSON.stringify({ type: 'game_started', lobbyId: msg.lobbyId }));
+        client.send(JSON.stringify({ type: 'game_started', lobbyId: lobbyId }));
         logger.info(`[handleStartGame] Sent 'game_started' WS message to ${client.nick}`);
       }
     });
 
     // Opcjonalnie automatyczny start rundy po inicjalizacji
     if (lobby.players.length > 0) {
-      logger.info(`[handleStartGame] Automatically starting first round for lobby ${msg.lobbyId}`);
+      logger.info(`[handleStartGame] Automatically starting first round for lobby ${lobbyId}`);
       gameService.startNextRound(wss);
     }
 

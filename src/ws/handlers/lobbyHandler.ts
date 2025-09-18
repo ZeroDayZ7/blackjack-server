@@ -1,6 +1,7 @@
 import type { Server } from 'ws';
 import type { MyWebSocket, LobbyMessage } from '@types';
 import * as LobbyHandlers from './lobby/index.js';
+import logger from '@logger';
 
 const lobbyHandlerMap: Record<string, (ws: MyWebSocket, wss: Server, msg: LobbyMessage) => void | Promise<void>> = {
   create_lobby: LobbyHandlers.handleCreateLobby,
@@ -25,6 +26,6 @@ export const routeLobbyMessage = async (ws: MyWebSocket, wss: Server, msg: Lobby
     await handler(ws, wss, msg);
   } catch (err) {
     ws.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
-    console.error(`[LOBBY_HANDLER_ERROR] ${msg.type} from ${ws.nick}`, err);
+    logger.error(`[LOBBY_HANDLER_ERROR] ${msg.type} from ${ws.nick}`, err);
   }
 };

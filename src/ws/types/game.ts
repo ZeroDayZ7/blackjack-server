@@ -13,7 +13,8 @@ export interface Card {
     | 'J'
     | 'Q'
     | 'K'
-    | 'A';
+    | 'A'
+    | 'hidden';
 }
 
 export type HiddenCard = { suit: 'hidden'; value: 'hidden' };

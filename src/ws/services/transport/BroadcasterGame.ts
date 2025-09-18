@@ -70,8 +70,12 @@ export class BroadcasterGame {
   /** Widok dealera dla publiczności (ukryte karty jeśli nie jego tura) */
   private getDealerPublicState(dealer: DealerState) {
     const isDealerTurn = this.state.gameStatus === 'dealer_turn' || this.state.gameStatus === 'finished';
-    const hand = isDealerTurn ? dealer.hand : dealer.hand.map(() => ({ suit: 'Hidden', value: 'Hidden' }));
+    const isHidden = !isDealerTurn; // Ukryj jeśli nie tura dealera
 
-    return { ...dealer, hand };
+    // Użyj DealerManager zamiast mapowania – załóż, że state.dealer jest spójny
+    return {
+      hand: this.dealerManager.getHand(isHidden),
+      score: this.dealerManager.getScore(isHidden),
+    };
   }
 }

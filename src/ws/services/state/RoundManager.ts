@@ -62,6 +62,11 @@ export class RoundManager {
     return this.readyPlayers.has(nick);
   }
 
+  public getCurrentPlayer(): string | null {
+  return this.state.currentPlayerNick;
+}
+
+
   /** PLACEHOLDER METHODS */
 
   private playBot(nick: string, wss?: Server) {
@@ -90,7 +95,7 @@ export class RoundManager {
       this.state.players[nick].status = 'stand';
     }
 
-    if (wss) this.broadcaster(wss);
+    if (wss) this.broadcastGameState?.(wss);
   }
 
   private playDealer(wss?: any) {
@@ -150,12 +155,14 @@ export class RoundManager {
 
     // Dealer: trzymaj prawdziwe karty w dealerManager, a w state tylko publiczną wersję
     // w tym miejscu przed dealowaniem dodaj:
-    const holeCard = this.state.deck.pop()!;
     const upCard = this.state.deck.pop()!;
+    const holeCard = this.state.deck.pop()!;
+    
 
     this.dealerManager.resetHand();
-    this.dealerManager.dealCard(holeCard); // ✅ zakryta karta
     this.dealerManager.dealCard(upCard); // ✅ odkryta karta
+    this.dealerManager.dealCard(holeCard); // ✅ zakryta karta
+    
 
     // W state trzymamy tylko publiczną wersję dealera
     this.state.dealer.hand = this.dealerManager.getHand(true); // pierwsza hidden, druga odkryta
