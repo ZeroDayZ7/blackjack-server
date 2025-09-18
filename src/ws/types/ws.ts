@@ -30,7 +30,7 @@ export interface LobbyMessage<T = any> extends BaseMessage<T> {
   type: LobbyMessageType;
   nick: string;
   useBots: boolean;
-  maxPlayers?: number;
+  maxPlayers: number;
 }
 export type WsMessage = LobbyMessage | GameMessage;
 

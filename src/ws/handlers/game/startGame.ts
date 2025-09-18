@@ -4,10 +4,10 @@ import { GameService } from '../../services/gameService.js';
 import { dataStore } from '@ws/data/data.js';
 import logger from '../../../utils/logger.js';
 import { BroadcasterGame } from '../../services/transport/BroadcasterGame.js';
-import { validateAction } from '@utils/wsValidators.js';
+import { validateMessage  } from '@utils/wsValidators.js';
 
 export const handleStartGame = async (ws: MyWebSocket, wss: Server, msg: GameMessage) => {
-  const validated = validateAction(ws, msg);
+  const validated = validateMessage (ws, msg);
   if (!validated) return;
 
   const { lobbyId, nick } = validated;
