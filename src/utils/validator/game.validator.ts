@@ -1,12 +1,14 @@
 import { z } from 'zod';
 
-// --- Wspólne pola dla wszystkich akcji związanych z grą ---
 const BaseGameSchema = z.object({
-  nick: z.string().min(1),
-  lobbyId: z.string().uuid(),
+  nick: z
+    .string()
+    .min(2)
+    .max(20)
+    .regex(/^[a-zA-Z0-9_-]+$/),
+  lobbyId: z.uuid(),
 });
 
-// --- Schematy specyficzne ---
 export const StartGameSchema = BaseGameSchema.extend({
   type: z.literal('start_game'),
 });
@@ -32,7 +34,6 @@ export const LeaveGameSchema = BaseGameSchema.extend({
   type: z.literal('leave_game'),
 });
 
-// Typy wejściowe
 export type StartGameInput = z.infer<typeof StartGameSchema>;
 export type SubscribeGameInput = z.infer<typeof SubscribeGameSchema>;
 export type PlayerReadyInput = z.infer<typeof PlayerReadySchema>;
@@ -40,7 +41,6 @@ export type RestartGameInput = z.infer<typeof RestartGameSchema>;
 export type PlayerActionInput = z.infer<typeof PlayerActionSchema>;
 export type LeaveGameInput = z.infer<typeof LeaveGameSchema>;
 
-// Union type dla wszystkich akcji gry
 export type GameInput =
   | StartGameInput
   | SubscribeGameInput

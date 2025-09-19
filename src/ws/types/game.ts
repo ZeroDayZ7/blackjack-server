@@ -53,6 +53,7 @@ export interface DealerState {
 
 export type GameStatus =
   | 'waiting_for_players'
+  | 'waiting_for_ready'
   | 'player_turn'
   | 'dealer_turn'
   | 'finished';

@@ -1,59 +1,61 @@
 import { Server } from 'ws';
-import { MyWebSocket, WsMessage } from '@types';
-import logger from '../../../utils/logger.js';
+import { MyWebSocket } from '@types';
+import logger from '@utils/logger.js';
 import { dataStore } from '@ws/data/data.js';
-import { broadcastLobbyList } from '../../services/transport/BroadcasterLobby.js'; // <- używamy tej funkcji
+import { broadcastLobbyList } from '@ws/services/transport/BroadcasterLobby.js';
+import { LeaveGameInput } from '@utils/validator/game.validator.js';
 
-export const handleLeaveGame = async (ws: MyWebSocket, wss: Server, msg: WsMessage) => {
-  logger.info('[handleLeaveGame] called', { nick: ws.nick, lobbyId: msg.lobbyId });
+/**
+ * Handler opuszczenia gry/lobby przez gracza.
+ * Usuwa gracza z gry i lobby, przenosi hosta jeśli konieczne,
+ * usuwa pustą grę i lobby, wysyła potwierdzenie i aktualizuje listę lobby.
+ */
+export const handleLeaveGame = async (ws: MyWebSocket, wss: Server, msg: LeaveGameInput) => {
 
-  const { lobbyId } = msg;
-  if (!lobbyId || !ws.nick) {
-    logger.warn('[handleLeaveGame] Missing lobbyId or nick', { lobbyId, nick: ws.nick });
-    ws.send(JSON.stringify({ type: 'error', message: 'Missing lobbyId or nick' }));
-    return;
-  }
+  const { lobbyId, nick } = msg;
 
   await dataStore.withLock(async () => {
     const lobby = dataStore.getLobbies().find((l) => l.id === lobbyId);
     const game = dataStore.getGames()[lobbyId];
-    logger.debug('[handleLeaveGame] fetched lobby and game', { lobby, game });
 
     if (!lobby) {
-      logger.warn('[handleLeaveGame] Lobby not found', { lobbyId });
+      logger.warn(`[LEAVE_GAME] Lobby not found: ${lobbyId}`);
+      ws.send(JSON.stringify({ type: 'error', message: 'Lobby not found' }));
       return;
     }
 
+    logger.info(`[LEAVE_GAME] Player leaving: ${nick} from lobby ${lobbyId}`);
+
     // Usuń gracza z lobby
-    lobby.players = lobby.players.filter((p) => p !== ws.nick);
-    logger.info('[handleLeaveGame] removed player from lobby', { nick: ws.nick, remainingPlayers: lobby.players });
+    lobby.players = lobby.players.filter((p) => p !== nick);
 
-    // Jeżeli opuszczający był hostem, przekaż hostowanie
-    if (lobby.host === ws.nick && lobby.players.length > 0) {
-      lobby.host = lobby.players[0];
-      logger.info('[handleLeaveGame] transferred host', { newHost: lobby.host });
+    // Przenieś hostowanie jeśli opuszczający był hostem
+    if (lobby.host === nick && lobby.players.length > 0) {
+      const newHost = lobby.players[0];
+      lobby.host = newHost;
+      logger.info(`[LEAVE_GAME] Host transferred to ${newHost}`);
     }
 
+    // Usuń gracza z gry jeśli istnieje
     if (game) {
-      game.removePlayer(ws.nick!, wss);
-      logger.info('[handleLeaveGame] removed player from game', { nick: ws.nick });
+      game.removePlayer(nick, wss);
+      logger.info(`[LEAVE_GAME] Player removed from game: ${nick}`);
     }
 
-    // Sprawdź, czy w lobby pozostał choć jeden prawdziwy gracz
+    // Usuń lobby i grę, jeśli nie ma żadnych prawdziwych graczy
     const humanPlayers = lobby.players.filter((p) => !p.startsWith('Bot'));
-
     if (humanPlayers.length === 0) {
-      // Usuń grę i lobby, jeśli nie ma żadnego człowieka
       dataStore.removeGame(lobbyId);
       dataStore.removeLobby(lobbyId);
-      logger.info('[handleLeaveGame] removed empty lobby and game', { lobbyId });
+      logger.info(`[LEAVE_GAME] Removed empty lobby and game: ${lobbyId}`);
     }
 
+    // Potwierdzenie dla wychodzącego gracza
     ws.send(JSON.stringify({ type: 'left_game', lobbyId }));
-    logger.info('[handleLeaveGame] sent left_game message', { lobbyId, nick: ws.nick });
+    logger.info(`[LEAVE_GAME] Sent left_game confirmation to ${nick}`);
 
     // Broadcast aktualnej listy lobby
     broadcastLobbyList(wss);
-    logger.debug('[handleLeaveGame] broadcasted lobby list');
+    logger.debug(`[LEAVE_GAME] Broadcasted updated lobby list`);
   });
 };

@@ -1,29 +1,19 @@
-import logger from '@logger';
-import { z } from 'zod';
-import { MyWebSocket, LobbyMessage, GameMessage } from '@types';
-import { LobbySchemas, GameSchemas } from './validator/index.js';
+import type { MyWebSocket } from '@types';
+import { ZodType } from 'zod';
 
-type Msg = LobbyMessage | GameMessage;
+type SchemasMap<T extends { type: string }> = Record<string, ZodType<T>>;
 
-export function validateMessage(ws: MyWebSocket, msg: Msg) {
-  // Połączone schematy
-  const Schemas: Record<string, z.ZodObject<any>> = {
-    ...LobbySchemas,
-    ...GameSchemas,
-  };
-
-  const schema = Schemas[msg.type];
+export function validateMessage<T extends { type: string }>(ws: MyWebSocket, msg: T, schemas: SchemasMap<T>): T | null {
+  const schema = schemas[msg.type];
   if (!schema) {
     ws.send(JSON.stringify({ type: 'error', message: `Unknown action type: ${msg.type}` }));
     return null;
   }
 
-  // Dodajemy nick z ws do walidacji
-  const dataToValidate = { ...msg, nick: ws.nick || '' };
+  const dataToValidate = { ...msg, nick: ws.nick ?? (msg as any).nick ?? '' };
   const parsed = schema.safeParse(dataToValidate);
 
   if (!parsed.success) {
-    logger.warn(`[Validation:${msg.type}] Invalid data`, { errors: parsed.error.issues });
     ws.send(
       JSON.stringify({
         type: 'error',
@@ -34,5 +24,5 @@ export function validateMessage(ws: MyWebSocket, msg: Msg) {
     return null;
   }
 
-  return parsed.data; // TS będzie miał typ ZodValidatedOutput
+  return parsed.data as T;
 }

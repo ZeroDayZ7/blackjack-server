@@ -32,9 +32,15 @@ export class PlayerManager {
   hit(nick: string, card: Card) {
     const player = this.players[nick];
     if (!player) return;
+
     player.hand.push(card);
     player.score = calculateScore(player.hand);
-    player.status = 'player_turn';
+
+    if (player.score > 21) {
+      player.status = 'bust'; // 🔹 ustaw status na bust
+    } else {
+      player.status = 'player_turn';
+    }
   }
 
   stand(nick: string) {
@@ -67,6 +73,4 @@ export class PlayerManager {
   getAllPlayers() {
     return this.players;
   }
-
-  
 }

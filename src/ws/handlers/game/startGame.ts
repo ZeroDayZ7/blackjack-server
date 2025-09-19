@@ -1,16 +1,14 @@
 import { Server, WebSocket } from 'ws';
-import { GameMessage, MyWebSocket, WsMessage } from '@types';
+import { MyWebSocket } from '@types';
 import { GameService } from '../../services/gameService.js';
 import { dataStore } from '@ws/data/data.js';
 import logger from '../../../utils/logger.js';
 import { BroadcasterGame } from '../../services/transport/BroadcasterGame.js';
-import { validateMessage  } from '@utils/wsValidators.js';
+import { StartGameInput } from '@utils/validator/game.validator.js';
 
-export const handleStartGame = async (ws: MyWebSocket, wss: Server, msg: GameMessage) => {
-  const validated = validateMessage (ws, msg);
-  if (!validated) return;
+export const handleStartGame = async (ws: MyWebSocket, wss: Server, msg: StartGameInput) => {
 
-  const { lobbyId, nick } = validated;
+  const { lobbyId, nick } = msg;
 
   await dataStore.withLock(async () => {
     const lobby = dataStore.getLobbies().find((l) => l.id === lobbyId);

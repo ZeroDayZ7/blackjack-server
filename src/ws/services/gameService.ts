@@ -30,6 +30,11 @@ export class GameService {
     logger.info(`[GameService] Broadcaster initialized`);
   }
 
+  // GameService.ts
+  public getCurrentPlayer(): string | null {
+    return this.state.getCurrentPlayer(); // delegacja do GameStateManager
+  }
+
   // Pobranie pełnego stanu gry
   public getState() {
     const state = this.state.getState();
@@ -100,7 +105,6 @@ export class GameService {
     const card = this.state.getState().deck.pop()!;
     logger.info(`[GameService] hit called by ${nick}. Card drawn: ${JSON.stringify(card)}`);
     this.playerManager.hit(nick, card);
-    this.roundManager.advanceTurn(wss);
     this.broadcaster.broadcast(wss);
     logger.info(`[GameService] hit processed and broadcasted`);
   }

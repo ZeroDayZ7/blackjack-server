@@ -1,20 +1,29 @@
 import type { Server } from 'ws';
 import type { GameMessage, MyWebSocket } from '@types';
 import { dataStore } from '@ws/data/data.js';
-import * as Handlers from './game/index.js'; // import wszystkich handlerów
+import * as Handlers from './game/index.js';
+import { validateMessage } from '@utils/wsValidators.js';
+import { GameSchemas } from '@utils/validator/index.js';
 
-const gameHandlerMap: Record<
-  string,
-  (ws: MyWebSocket, wss: Server, msg: GameMessage, game?: any) => void | Promise<void>
-> = {
-  start_game: Handlers.handleStartGame,
-  subscribe_to_game: Handlers.handleSubscribeToGame,
-  player_ready: Handlers.handlePlayerReady,
-  restart_game: Handlers.handleRestartGame,
-  player_action: Handlers.handlePlayerAction,
-  leave_game: Handlers.handleLeaveGame,
+// --- Typ handlera z generics ---
+type Handler<T extends GameMessage = GameMessage> = (
+  ws: MyWebSocket,
+  wss: Server,
+  msg: T,
+  game?: any,
+) => void | Promise<void>;
+
+// --- Mapa handlerów ---
+const gameHandlerMap: Record<string, Handler> = {
+  start_game: Handlers.handleStartGame as Handler,
+  subscribe_to_game: Handlers.handleSubscribeToGame as Handler,
+  player_ready: Handlers.handlePlayerReady as Handler,
+  restart_game: Handlers.handleRestartGame as Handler,
+  player_action: Handlers.handlePlayerAction as Handler,
+  leave_game: Handlers.handleLeaveGame as Handler,
 };
 
+// --- Router ---
 export const routeGameMessage = async (ws: MyWebSocket, wss: Server, msg: GameMessage) => {
   if (!msg.type) {
     ws.send(JSON.stringify({ type: 'error', message: 'Missing message type' }));
@@ -27,11 +36,16 @@ export const routeGameMessage = async (ws: MyWebSocket, wss: Server, msg: GameMe
     return;
   }
 
-  // const game = msg.lobbyId ? (await import('@ws/data/data.js')).dataStore.getGames()[msg.lobbyId] : undefined;
-  const game = msg.lobbyId ? dataStore.getGames()[msg.lobbyId] : undefined;
+  // ✅ Walidacja i typowanie
+  const validated = validateMessage(ws, msg, GameSchemas);
+  if (!validated) return;
+
+  // Pobieramy instancję gry
+  const game = validated.lobbyId ? dataStore.getGames()[validated.lobbyId] : undefined;
 
   try {
-    await handler(ws, wss, msg, game);
+    // ✅ Przekazujemy validated zamiast msg – TS widzi pełne pola
+    await handler(ws, wss, validated, game);
   } catch (err) {
     ws.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
     console.error(`[GAME_HANDLER_ERROR] ${msg.type} from ${ws.nick}`, err);

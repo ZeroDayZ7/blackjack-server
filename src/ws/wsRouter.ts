@@ -3,6 +3,7 @@ import type { WebSocketServer } from 'ws';
 import type { GameMessage, LobbyMessage, MyWebSocket, WsMessage } from './types/index.js';
 import { routeLobbyMessage } from './handlers/lobbyHandler.js';
 import { routeGameMessage } from './handlers/gameHandler.js';
+import logger from '@logger';
 
 export function routeWsMessage(ws: MyWebSocket, wss: WebSocketServer, data: WsMessage) {
   switch (data.type) {
@@ -19,7 +20,7 @@ export function routeWsMessage(ws: MyWebSocket, wss: WebSocketServer, data: WsMe
     case 'leave_game':
       return routeGameMessage(ws, wss, data as GameMessage);
     default:
-      console.warn('❌ Unknown WS message type:', data.type);
+      logger.warn('❌ [wsRouter] Unknown WS message type:', data);
   }
 }
  

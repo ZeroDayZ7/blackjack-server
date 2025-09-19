@@ -4,30 +4,29 @@ import { dataStore } from '@ws/data/data.js';
 import { broadcastLobbyUpdate, broadcastLobbyList } from '@ws/services/transport/BroadcasterLobby.js';
 import logger from '@logger';
 import { validateMessage } from '@utils/wsValidators.js';
-import { LeaveLobbyInput } from '@utils/validator/lobby.validator.js';
+import { LeaveLobbyInput, LobbySchemas } from '@utils/validator/lobby.validator.js';
 
 /**
  * Handle player leaving a lobby
  */
-export async function handleLeaveLobby(ws: MyWebSocket, wss: Server, msg: LobbyMessage) {
-  // Walidacja danych przez Zod
-  const validatedData = validateMessage(ws, msg) as LeaveLobbyInput | null;
-  if (!validatedData) return;
+export async function handleLeaveLobby(ws: MyWebSocket, wss: Server, msg: LeaveLobbyInput) {
 
-  const lobby = dataStore.getLobbies().find((l) => l.id === validatedData.lobbyId);
+ const { lobbyId, nick } = msg;
+
+  const lobby = dataStore.getLobbies().find((l) => l.id === lobbyId);
   if (!lobby) {
     logger.info(
-      `[LEAVE_LOBBY] Lobby ${validatedData.lobbyId} not found, still confirming leave for ${validatedData.nick}`,
+      `[LEAVE_LOBBY] Lobby ${lobbyId} not found, still confirming leave for ${nick}`,
     );
-    ws.send(JSON.stringify({ type: 'left_lobby', lobbyId: validatedData.lobbyId, nick: validatedData.nick }));
+    ws.send(JSON.stringify({ type: 'left_lobby', lobbyId: lobbyId, nick: nick }));
     return;
   }
 
   // Usuń gracza
-  lobby.players = lobby.players.filter((p) => p !== validatedData.nick);
+  lobby.players = lobby.players.filter((p) => p !== nick);
 
   // Jeśli odszedł host, wybierz nowego
-  if (lobby.host === validatedData.nick) {
+  if (lobby.host === nick) {
     const humanPlayers = lobby.players.filter((p) => !p.startsWith('Bot'));
     lobby.host = humanPlayers[0] || null;
   }
@@ -42,7 +41,7 @@ export async function handleLeaveLobby(ws: MyWebSocket, wss: Server, msg: LobbyM
   }
 
   // Potwierdzenie dla wychodzącego gracza
-  ws.send(JSON.stringify({ type: 'left_lobby', lobbyId: lobby.id, nick: validatedData.nick }));
+  ws.send(JSON.stringify({ type: 'left_lobby', lobbyId: lobby.id, nick: nick }));
 
   // Zaktualizuj listę wszystkich lobby
   broadcastLobbyList(wss);

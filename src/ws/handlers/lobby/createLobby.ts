@@ -1,24 +1,18 @@
 import type { Server } from 'ws';
-import type { MyWebSocket, LobbyMessage } from '@types';
+import type { MyWebSocket } from '@types';
 import { dataStore } from '@ws/data/data.js';
 import { broadcastLobbyList } from '@ws/services/transport/BroadcasterLobby.js';
 import crypto from 'crypto';
 import logger from '@utils/logger.js';
 import { CreateLobbyInput } from '@utils/validator/lobby.validator.js';
-import { validateMessage } from '@utils/wsValidators.js';
 
 /**
  * Handle creation of a new lobby
  */
-export const handleCreateLobby = async (ws: MyWebSocket, wss: Server, msg: LobbyMessage) => {
+export const handleCreateLobby = async (ws: MyWebSocket, wss: Server, msg: CreateLobbyInput) => {
   logger.debug(`[HANDLE_CREATE_LOBBY] Received request: ${JSON.stringify(msg, null, 2)}`);
 
-  // Walidacja wiadomości (LobbyMessage)
-  const validatedData = validateMessage(ws, msg) as CreateLobbyInput | null;
-  if (!validatedData) return;
-
-  const { nick, lobbyName, maxPlayers, useBots = false } = validatedData;
-  logger.info(`[CREATE_LOBBY] ${nick} creates lobby: ${lobbyName}`);
+  const { lobbyName, nick, maxPlayers, useBots } = msg;
 
   // Sprawdzenie czy gracz już jest w lobby
   const existingLobby = dataStore.getLobbies().find((l) => l.players.includes(nick));

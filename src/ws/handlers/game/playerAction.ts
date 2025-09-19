@@ -1,50 +1,66 @@
 import { GameMessage, MyWebSocket } from '@types';
 import { Server } from 'ws';
 import logger from '@logger';
+import { z } from 'zod';
+import { dataStore } from '@ws/data/data.js';
+import { GameService } from '@ws/services/gameService.js';
 
-export const handlePlayerAction = (ws: MyWebSocket, wss: Server, msg: GameMessage, game: any) => {
-  logger.info(`[handlePlayerAction] received action: ${msg.action} from socket nick=${ws.nick || 'undefined'}`);
-  logger.debug(`[handlePlayerAction] raw message: ${JSON.stringify(msg)}`);
+// --- Schemat walidacji dla PlayerAction ---
+export const PlayerActionSchema = z.object({
+  type: z.literal('player_action'),
+  lobbyId: z.uuid(),
+  action: z.enum(['hit', 'stand', 'double']),
+  nick: z.string().min(1),
+});
 
-  const { lobbyId } = msg;
-  if (!lobbyId || !ws.nick) {
-    logger.warn('[handleLeaveGame] Missing lobbyId or nick', { lobbyId, nick: ws.nick });
-    ws.send(JSON.stringify({ type: 'error', message: 'Missing lobbyId or nick' }));
+export type PlayerActionInput = z.infer<typeof PlayerActionSchema>;
+
+export const handlePlayerAction = (ws: MyWebSocket, wss: Server, msg: GameMessage) => {
+  // --- Walidacja wejścia ---
+  const parsed = PlayerActionSchema.safeParse({ ...msg, nick: ws.nick ?? msg.nick });
+  if (!parsed.success) {
+    logger.warn('[handlePlayerAction] Validation failed', parsed.error.issues);
+    ws.send(JSON.stringify({ type: 'error', message: 'Invalid player_action data', details: parsed.error.issues }));
     return;
   }
 
+  const validated: PlayerActionInput = parsed.data;
+  logger.info(`[handlePlayerAction] validated action: ${validated.action} from nick=${validated.nick}`);
+  logger.debug(`[handlePlayerAction] raw message: ${JSON.stringify(validated)}`);
+
+  const game = dataStore.getGame(validated.lobbyId) as GameService;
+
   if (!game) {
-    logger.error(`[handlePlayerAction] no game instance found for lobbyId=${msg.lobbyId}`);
+    logger.error(`[handlePlayerAction] no game instance found for lobbyId=${validated.lobbyId}`);
     ws.send(JSON.stringify({ type: 'error', message: 'Game not found' }));
     return;
   }
 
   const currentPlayer = game.getCurrentPlayer();
-  if (currentPlayer !== ws.nick) {
-    logger.warn(`[handlePlayerAction] Not your turn: ${ws.nick} vs ${currentPlayer}`);
+  if (currentPlayer !== validated.nick) {
+    logger.warn(`[handlePlayerAction] Not your turn: ${validated.nick} vs ${currentPlayer}`);
     ws.send(JSON.stringify({ type: 'error', message: 'Not your turn' }));
     return;
   }
 
-  switch (msg.action) {
+  // --- Obsługa akcji ---
+  switch (validated.action) {
     case 'hit':
-      logger.info(`[handlePlayerAction] calling game.hit for nick=${ws.nick}`);
-      game.hit(ws.nick, wss);
+      logger.info(`[handlePlayerAction] calling game.hit for nick=${validated.nick}`);
+      game.hit(validated.nick, wss);
       break;
-
     case 'stand':
-      logger.info(`[handlePlayerAction] calling game.stand for nick=${ws.nick}`);
-      game.stand(ws.nick, wss);
+      logger.info(`[handlePlayerAction] calling game.stand for nick=${validated.nick}`);
+      game.stand(validated.nick, wss);
       break;
-
     case 'double':
-      logger.info(`[handlePlayerAction] calling game.double for nick=${ws.nick}`);
-      game.double(ws.nick, wss);
+      logger.info(`[handlePlayerAction] calling game.double for nick=${validated.nick}`);
+      game.double(validated.nick, wss);
       break;
-
     default:
-      logger.warn(`[handlePlayerAction] unknown action: ${msg.action} from nick=${ws.nick}`);
-      ws.send(JSON.stringify({ type: 'error', message: `Unknown action: ${msg.action}` }));
+      // to nie powinno się zdarzyć, bo Zod już waliduje
+      logger.error(`[handlePlayerAction] unknown action: ${validated.action}`);
+      ws.send(JSON.stringify({ type: 'error', message: `Unknown action: ${validated.action}` }));
       return;
   }
 };
