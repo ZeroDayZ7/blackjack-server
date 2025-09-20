@@ -21,6 +21,7 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.1.0",
     "helmet": "^8.1.0",
+    "lru-cache": "^11.2.1",
     "rate-limiter-flexible": "^7.3.1",
     "uuid": "^13.0.0",
     "winston": "^3.17.0",

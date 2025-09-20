@@ -1,3 +1,4 @@
+import { ConnectionMetadata } from '@ws/connectionManager.js';
 import type { WebSocket } from 'ws';
 
 type LobbyMessageType = 'create_lobby' | 'join_lobby' | 'leave_lobby' | 'ping_lobbies';
@@ -38,4 +39,11 @@ export interface MyWebSocket extends WebSocket {
   nick?: string;
   lobbyId?: string;
   inGame?: boolean;
+  connectedAt?: Date;
+  connectionId: string;
+  metadata: ConnectionMetadata;
+  updateActivity: () => void;
+  recordError: () => void;
+  isActive: boolean;
+  getLatency: () => number;
 }

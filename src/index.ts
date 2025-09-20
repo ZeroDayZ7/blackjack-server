@@ -1,26 +1,37 @@
-import http from 'http';
+// server.ts
+import { createServer } from 'http';
 import app from './app.js';
-import { env } from './config/env.js';
-import { setupWebSocket } from './ws/wsServer.js';
-import logger from '@logger';
+import { setupWebSocket } from './ws/enhancedWsServer.js';
+import { initializeAlerts } from './monitoring/alerts.js';
+import logger from './utils/logger.js';
+import { ConnectionManager } from '@ws/connectionManager.js';
 
-const PORT = env.PORT || 5000;
+const httpServer = createServer(app);
 
-const server = http.createServer(app);
+// Setup WebSocket + ConnectionManager
+const wss = setupWebSocket(httpServer);
+globalThis.wss = wss;
+const connectionManager = wss.getConnectionManager();
+initializeAlerts(connectionManager);
 
-// konfiguracja WS
-const wss = setupWebSocket(server);
-app.set('wss', wss);
+// Graceful shutdown
+const gracefulShutdown = (signal: string) => {
+  logger.info(`[SHUTDOWN] Received ${signal}`);
+  Promise.all([wss.shutdown()])
+    .then(() => {
+      logger.info('[SHUTDOWN] Done');
+      process.exit(0);
+    })
+    .catch((err) => {
+      logger.error('[SHUTDOWN_ERROR]', { error: err.message });
+      process.exit(1);
+    });
+};
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// global error handlers
-process.on('uncaughtException', (err) => {
-  logger.error('❌ Uncaught exception:', err);
+const PORT = process.env.PORT || 3000;
+httpServer.listen(PORT, () => {
+  logger.info(`🚀 Server running on http://localhost:${PORT}`);
 });
-
-process.on('unhandledRejection', (reason) => {
-  logger.error('❌ Unhandled rejection:', reason);
-});
-
-server.listen(PORT, () => {
-  logger.info(`🚀 Server running on http://localhost:${PORT} [${env.NODE_ENV}]`);
-});
+ 
